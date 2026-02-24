@@ -18,7 +18,7 @@ rcParams['font.family'] = "Times New Roman"
 EPOCHS = 1000
 ALPHA, BETA, GAMMA = 1, 0, 0
 LR = 0.001
-TOLERANCE = 7
+TOLERANCE = 70
 
 
 def train(n_classes, n_colors, data):
@@ -90,12 +90,15 @@ def train(n_classes, n_colors, data):
     # Set a variable to store the best loss achieved
     best_loss, unimproved_epochs = torch.inf, 0
 
-    # Get the color embeddings
-    color_embeddings = color_embedding_model(color_indices)
-
     # Freeze the color embedding model parameters
     for param in color_embedding_model.parameters():
         param.requires_grad = False
+
+    # Compute fixed color embeddings (no graph attached)
+    with torch.no_grad():
+        color_embeddings = color_embedding_model(color_indices)
+
+    color_embeddings = color_embeddings.detach()
 
     # Start the training loop
     for epoch in tqdm(range(EPOCHS), desc="Training", total=EPOCHS):
@@ -142,11 +145,10 @@ def train(n_classes, n_colors, data):
         optimizer.step()
 
         # Append the losses and variance for plotting
-        losses_gnn.append(loss_gnn.cpu().item())
-        losses_attention.append(loss_attention.cpu().item())
-        variances.append(total_variance.cpu().item())
-        losses_total.append(loss.cpu().item())
-        print("Epoch:", epoch, "|", "GNN Loss:", loss_gnn.item(), "|", "Variance:", total_variance.item())
+        losses_gnn.append(loss_gnn.detach().cpu().item())
+        losses_attention.append(loss_attention.detach().cpu().item())
+        variances.append(total_variance.detach().cpu().item())
+        losses_total.append(loss.detach().cpu().item())
 
         if loss < best_loss * 0.99:
             best_loss = loss
@@ -168,12 +170,12 @@ def train(n_classes, n_colors, data):
     # Plot the losses and variance
     plt.figure(figsize=(7, 6))
     plt.plot(losses_gnn, label='GNN Loss', color="dodgerblue")
-    plt.plot(losses_attention, label='Attention Loss', color="hotpink")
-    plt.plot(variances, label='Variance', color="turquoise")
-    plt.plot(losses_total, label='Total Loss', color="salmon")
+    # plt.plot(losses_attention, label='Attention Loss', color="hotpink")
+    # plt.plot(variances, label='Variance', color="turquoise")
+    # plt.plot(losses_total, label='Total Loss', color="salmon")
     plt.xlabel('Epoch', fontsize=16)
     plt.ylabel('Loss Value', fontsize=16)
-    plt.title('Training Losses', fontsize=22)
+    plt.title(f'Training Losses (ACC: {gnn_accuracy:.4f})', fontsize=22)
     plt.legend(fontsize=14)
     plt.grid()
     plt.tight_layout()
