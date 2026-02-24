@@ -10,6 +10,7 @@ from matplotlib import rcParams
 from models import *
 from constants import *
 from tqdm.auto import tqdm
+from sklearn.metrics import roc_auc_score
 
 # Set the font for the plots
 rcParams['font.family'] = "Times New Roman"
@@ -163,10 +164,21 @@ def train(n_classes, n_colors, data):
     print(f"Final GNN Accuracy: {gnn_accuracy:.4f}")
     print(f"Final Attention Accuracy: {attention_accuracy:.4f}")
 
+    # Check AUC
+    gnn_scores = mlp_output.softmax(dim=1)[:, 1].detach().cpu().numpy()
+    attention_scores = attention_output.softmax(dim=1)[:, 1].detach().cpu().numpy()
+    node_labels_np = node_labels.detach().cpu().numpy()
+    color_labels_np = color_labels.detach().cpu().numpy()
+    gnn_auc = roc_auc_score(node_labels_np, gnn_scores)
+    attention_auc = roc_auc_score(color_labels_np, attention_scores)
+    print(f"GNN AUC: {gnn_auc:.4f}")
+    print(f"Attention AUC: {attention_auc:.4f}")
+
+
     # Plot the losses and variance
     plt.figure(figsize=(7, 6))
-    plt.plot(losses_gnn, label=f'GNN Loss (acc: {gnn_accuracy:.4f})', color="dodgerblue")
-    plt.plot(losses_attention, label=f'Attention Loss (acc: {attention_accuracy:.4f})', color="hotpink")
+    plt.plot(losses_gnn, label=f'GNN Loss (acc: {gnn_accuracy:.4f} AUC: {gnn_auc:.4f})', color="dodgerblue")
+    plt.plot(losses_attention, label=f'Attention Loss (acc: {attention_accuracy:.4f} AUC: {attention_auc:.4f})', color="hotpink")
     plt.plot(variances, label='Variance', color="turquoise")
     plt.plot(losses_total, label='Total Loss', color="salmon")
     plt.xlabel('Epoch', fontsize=16)
