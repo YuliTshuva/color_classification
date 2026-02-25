@@ -4,13 +4,14 @@ Creating a training script for the model.
 """
 
 # Imports
-from os.path import join
+import os
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from models import *
-from constants import *
+from utils import *
 from tqdm.auto import tqdm
 from sklearn.metrics import roc_auc_score
+import json
 
 # Set the font for the plots
 rcParams['font.family'] = "Times New Roman"
@@ -27,11 +28,11 @@ FREEZE_COLOR_EMBEDDING = False
 
 def train(n_classes, n_colors, data):
     """
-
+    Get the data and train the models for color classification.
     :param data: edge_index (2, edges), color_indices (n_vertices,), labels (n_colors,)
     :param n_classes: Amount of classes to classify the colors into.
     :param n_colors: Amount of colors in the dataset.
-    :return:
+    :return: The trained models: GNN, MLP, Color Embedding, Attention Classifier.
     """
     # Initiate the GNN model
     gnn_model = GNN(in_features=COLOR_EMBEDDING_DIM,
@@ -174,11 +175,11 @@ def train(n_classes, n_colors, data):
     print(f"GNN AUC: {gnn_auc:.4f}")
     print(f"Attention AUC: {attention_auc:.4f}")
 
-
     # Plot the losses and variance
     plt.figure(figsize=(7, 6))
     plt.plot(losses_gnn, label=f'GNN Loss (acc: {gnn_accuracy:.4f} AUC: {gnn_auc:.4f})', color="dodgerblue")
-    plt.plot(losses_attention, label=f'Attention Loss (acc: {attention_accuracy:.4f} AUC: {attention_auc:.4f})', color="hotpink")
+    plt.plot(losses_attention, label=f'Attention Loss (acc: {attention_accuracy:.4f} AUC: {attention_auc:.4f})',
+             color="hotpink")
     plt.plot(variances, label='Variance', color="turquoise")
     plt.plot(losses_total, label='Total Loss', color="salmon")
     plt.xlabel('Epoch', fontsize=16)
@@ -190,27 +191,75 @@ def train(n_classes, n_colors, data):
     plt.savefig(join("plots", "training_losses.png"))
     plt.show()
 
-
-def generate_random_data(n_vertices, n_colors, n_classes):
-    # Create edges between vertices
-    edge_index = torch.randint(0, n_vertices, (2, 15 * n_vertices))  # 5000 random edges
-    # Create random color indices for each vertex
-    color_indices = torch.randint(0, n_colors, (n_vertices,))
-    # Create random labels for each vertex
-    labels = torch.randint(0, n_classes, (n_colors,))
-    return edge_index, color_indices, labels
+    return gnn_model, mlp_model, color_embedding_model, attention_model
 
 
 def main():
+    # Set the n_classes to 2 as devora said
     n_classes = 2
-    n_vertices = 1000
-    n_colors = n_vertices // 10
 
-    # Generate random data
-    edge_index, color_indices, labels = generate_random_data(n_vertices, n_colors, n_classes)
+    # Load the Twitch dataset
+    edge_index, color_indices, labels = load_twitch_data()
+
+    # Find n_colors by the length of the labels
+    n_colors = len(labels)
+
+    # Find the maximal color index in the data
+    max_color_index = n_colors - 1
+    # Create the training data by excluding the maximal color index
+    train_color_indices = color_indices[color_indices != max_color_index]
+    train_labels = labels[:-1]
+    unwanted = torch.where(color_indices == max_color_index)[0]
+    mask = ~torch.isin(edge_index, unwanted).any(dim=1)
+    train_edge_index = edge_index[mask]
 
     # Train the model
-    train(n_classes, n_colors, data=(edge_index, color_indices, labels))
+    gnn_model, mlp_model, color_embedding_model, attention_model = train(n_classes, n_colors,
+                                                                         data=(train_edge_index, train_color_indices,
+                                                                               train_labels))
+
+    # Use the models to predict the labels for the maximal color index
+    color_embedding_model.eval()
+    gnn_model.eval()
+    mlp_model.eval()
+    attention_model.eval()
+    with torch.no_grad():
+        # Get the color embedding for the maximal color index
+        max_color_embedding = color_embedding_model(torch.tensor([max_color_index]).to(DEVICE))
+        # Get the GNN output for the maximal color index
+        color_embeddings = color_embedding_model(color_indices)
+        gnn_output = gnn_model(color_embeddings, edge_index)
+        # Get the MLP output for GNN prediction
+        mlp_output = mlp_model(gnn_output)
+        # Get the attention model output for the maximal color index
+        attention_output = attention_model(max_color_embedding)
+
+    # Save all the models
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    torch.save(gnn_model.state_dict(), join(MODELS_DIR, "gnn_model.pth"))
+    torch.save(mlp_model.state_dict(), join(MODELS_DIR, "mlp_model.pth"))
+    torch.save(color_embedding_model.state_dict(), join(MODELS_DIR, "color_embedding_model.pth"))
+    torch.save(attention_model.state_dict(), join(MODELS_DIR, "attention_model.pth"))
+
+    # Find the predicted label for the nodes with the maximal color index
+    predicted_label_gnn = mlp_output[color_indices == max_color_index].argmax(dim=1).cpu().item()
+    predicted_label_attention = attention_output.argmax(dim=1).cpu().item()
+    # Get the logits using softmax
+    predicted_label_gnn_logits = mlp_output[color_indices == max_color_index].softmax(dim=1).cpu().numpy()
+    predicted_label_attention_logits = attention_output.softmax(dim=1).cpu().numpy()
+    # Get the predicted probabilities for the positive class (assuming class 1 is the positive class)
+    predicted_label_gnn_prob = predicted_label_gnn_logits[:, 1].item()
+    predicted_label_attention_prob = predicted_label_attention_logits[:, 1].item()
+
+    # Save the results
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    with open(f"{DATASET_NAME}.json", "w") as f:
+        json.dump({
+            "predicted_labels_gnn": predicted_label_gnn,
+            "attention_model": predicted_label_attention,
+            "predicted_prob_gnn": predicted_label_gnn_prob,
+            "predicted_prob_attention": predicted_label_attention_prob
+        }, f)
 
 
 if __name__ == '__main__':
