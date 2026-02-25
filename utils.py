@@ -33,6 +33,6 @@ def load_twitch_data():
     color_indices = torch.tensor(nodes_df['language'].map(language_to_index).values, dtype=torch.long)
 
     # Set the labels
-    labels = torch.tensor([1 if lang in LATIN_LANGUAGES else 0 for lang in language_to_index], dtype=torch.long)
+    labels = torch.tensor([1 if lang in LATIN_LANGUAGES else 0 for lang in languages], dtype=torch.long)
 
     return edge_index, color_indices, labels
