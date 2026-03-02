@@ -7,6 +7,10 @@ Helper functions.
 from constants import *
 import torch
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+
+rcParams['font.family'] = "Times New Roman"
 
 
 def generate_random_data(n_vertices, n_colors, n_classes):
@@ -36,3 +40,19 @@ def load_twitch_data():
     labels = torch.tensor([1 if lang in LATIN_LANGUAGES else 0 for lang in languages], dtype=torch.long)
 
     return edge_index, color_indices, labels
+
+
+def twitch_data_analysis():
+    # Load the Twitch dataset
+    _, color_indices, labels = load_twitch_data()
+    # Find the number of vertices for each color
+    color_counts = torch.bincount(color_indices)
+    # Plot the distribution of colors
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(len(color_counts)), color_counts.numpy(), color='skyblue', edgecolor='black')
+    plt.xlabel('Color Index (Language)', fontsize=15)
+    plt.ylabel('Number of Vertices', fontsize=15)
+    plt.title('Distribution of Colors (Languages) in Twitch Dataset', fontsize=20)
+    plt.xticks(range(len(color_counts)), [f'Lang {i}' for i in range(len(color_counts))], rotation=45)
+    plt.tight_layout()
+    plt.show()
