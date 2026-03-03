@@ -183,7 +183,8 @@ def train(n_classes, n_colors, data):
         "train_attention_accuracy": train_attention_accuracy,
         "test_gnn_accuracy": test_gnn_accuracy,
         "test_attention_accuracy": test_attention_accuracy,
-        "attention_score": attention_scores[~training_colors].item()
+        "attention_score": attention_scores[~training_colors].item(),
+        "test_labels": color_labels[~training_colors].cpu().numpy()
     }
 
     # Plot the losses and variance
@@ -198,9 +199,8 @@ def train(n_classes, n_colors, data):
     plt.legend(fontsize=14)
     plt.grid()
     plt.tight_layout()
-    plt.savefig(join("plots", "training_losses.png"))
+    plt.savefig(join("plots", f"training_losses_{'_'.join([str(element.item()) for element in test_colors])}.png"))
     plt.close()
-    # plt.show()
 
     return gnn_model, mlp_model, color_embedding_model, attention_model, results_dct
 
@@ -217,17 +217,17 @@ def main():
 
     # Set a results df
     results_df = pd.DataFrame(columns=["train_gnn_accuracy", "train_attention_accuracy",
-                                       "test_gnn_accuracy", "test_attention_accuracy", "attention_score"])
+                                       "test_gnn_accuracy", "test_attention_accuracy",
+                                       "attention_score", "test_labels"])
 
     # Train the model
-    for i in tqdm(range(len(n_colors)), desc="Training for each color", total=n_colors):
+    for i in tqdm(range(n_colors), desc="Training for each color", total=n_colors):
         # Define test labels
         test_colors = torch.tensor([i])
         # Train the model with the current test color
-        (gnn_model, mlp_model, color_embedding_model,
-         attention_model, result_dct) = train(n_classes, n_colors, data=(edge_index, color_indices,
-                                                                         labels, test_colors))
-         # Append the results to the results df
+        _, _, _, _, result_dct = train(n_classes, n_colors, data=(edge_index, color_indices,
+                                                                  labels, test_colors))
+        # Append the results to the results df
         results_df.loc[i] = result_dct
 
         # Save the results
