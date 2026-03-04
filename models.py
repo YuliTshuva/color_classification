@@ -14,49 +14,46 @@ import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from constants import *
 
+
 class GNN(torch.nn.Module):
-    def __init__(self, in_features, hidden_dim, out_features, K):
-        """
-        Initialize the GNN model.
-        :param K: The amount of GNN layers to use.
-        """
+    def __init__(self, in_features, hidden_dim, out_features, K, dropout_rate: float):
         super().__init__()
+        self.dropout_rate = dropout_rate  # Store the rate
         self.input_conv = GCNConv(in_features, hidden_dim)
-        # Create K-1 GNN layers
-        self.conv_layers = nn.ModuleList([GCNConv(hidden_dim, hidden_dim) for _ in range(K - 1)])
+        if K >= 3:
+            self.conv_layers = nn.ModuleList([GCNConv(hidden_dim, hidden_dim) for _ in range(K - 2)])
+        else:
+            self.conv_layers = []
         self.output_conv = GCNConv(hidden_dim, out_features)
 
     def forward(self, x, edge_index):
-        """
-        Forward pass of the GNN model.
-        :param x: The node features. Shape: [num_nodes, in_features].
-        :param edge_index: The edge index of the graph. Shape: [2, num_edges].
-        :return: The output of the GNN model.
-        """
+        # Input layer
         x = self.input_conv(x, edge_index)
         x = F.relu(x)
+        x = F.dropout(x, p=self.dropout_rate, training=self.training)  # Dropout here
+
+        # Hidden layers
         for conv in self.conv_layers:
             x = conv(x, edge_index)
             x = F.relu(x)
+            x = F.dropout(x, p=self.dropout_rate, training=self.training)
+
+        # Output layer
         x = self.output_conv(x, edge_index)
         return x
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dims, output_dim):
-        """
-        Initialize the MLP model.
-        :param input_dim: The dimension of the input features.
-        :param hidden_dims: A list of hidden dimensions for the MLP layers.
-        :param output_dim: The dimension of the output features.
-        """
+    def __init__(self, input_dim, hidden_dims, output_dim, dropout_rate: float):
         super(MLP, self).__init__()
         layers = []
         prev_dim = input_dim
         for hidden_dim in hidden_dims:
             layers.append(nn.Linear(prev_dim, hidden_dim))
             layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_rate))
             prev_dim = hidden_dim
+
         layers.append(nn.Linear(prev_dim, output_dim))
         self.mlp = nn.Sequential(*layers)
 

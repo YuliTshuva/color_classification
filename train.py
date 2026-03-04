@@ -17,9 +17,9 @@ rcParams['font.family'] = "Times New Roman"
 
 # Hyperparameters
 EPOCHS = 10000
-ALPHA, BETA, GAMMA = 1, 1, 1
+ALPHA, BETA, GAMMA = 1, 1, 3
 LR = 0.001
-TOLERANCE = 70
+TOLERANCE = 50
 
 # Constants
 FREEZE_COLOR_EMBEDDING = False
@@ -168,6 +168,28 @@ def train(n_classes, n_colors, data):
         if unimproved_epochs >= TOLERANCE:
             print(f"Early stopping at epoch {epoch} with best loss {best_loss:.4f}")
             break
+
+    # Set the models to evaluation mode
+    gnn_model.eval()
+    mlp_model.eval()
+    color_embedding_model.eval()
+    attention_model.eval()
+
+    # Predict the outputs for the entire dataset
+    with torch.no_grad():
+        # Embed the color indices for GNN input
+        color_embeddings = color_embedding_model(color_indices)
+
+        # Get the GNN output
+        gnn_output = gnn_model(color_embeddings, edge_index)
+
+        # Get the MLP output for GNN prediction
+        mlp_output = mlp_model(gnn_output)
+
+        # Embed colors enumerator for attention model
+        colors_emb = color_embedding_model(colors_enumerator)
+        # Get the attention model output
+        attention_output = attention_model(colors_emb)
 
     # Calculate the predictions and scores
     gnn_predictions = mlp_output.argmax(dim=1)
