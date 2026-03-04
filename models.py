@@ -85,7 +85,8 @@ class AttentionColorClassifier(nn.Module):
         super().__init__()
         self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, batch_first=True)
         self.norm = nn.LayerNorm(dim)
-        self.mlp = MLP(input_dim=dim, hidden_dims=ATTENTION_HIDDEN_DIMS, output_dim=num_classes)
+        self.mlp = MLP(input_dim=dim, hidden_dims=ATTENTION_HIDDEN_DIMS, output_dim=num_classes,
+                       dropout_rate=ATTENTION_DROPOUT_RATE)
 
     def forward(self, x):
         # Self-Attention

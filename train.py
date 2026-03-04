@@ -37,12 +37,14 @@ def train(n_classes, n_colors, data):
     gnn_model = GNN(in_features=COLOR_EMBEDDING_DIM,
                     hidden_dim=GNN_HIDDEN_DIM,
                     out_features=GNN_EMBEDDING_DIM,
-                    K=K_GNN_LAYERS)
+                    K=K_GNN_LAYERS,
+                    dropout_rate=GNN_DROPOUT_RATE)
 
     # Initiate the MLP model for GNN prediction
     mlp_model = MLP(input_dim=GNN_EMBEDDING_DIM,
                     hidden_dims=GNN_MLP_HIDDEN_DIMS,
-                    output_dim=n_classes)
+                    output_dim=n_classes,
+                    dropout_rate=MLP_DROPOUT_RATE)
 
     # Initiate the color embedding model
     color_embedding_model = ColorEmbedding(n_colors=n_colors,
