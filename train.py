@@ -10,6 +10,7 @@ from models import *
 from utils import *
 from tqdm.auto import tqdm
 import pandas as pd
+from sklearn.metrics import roc_auc_score
 
 # Set the font for the plots
 rcParams['font.family'] = "Times New Roman"
@@ -118,24 +119,32 @@ def train(n_classes, n_colors, data):
         loss_gnn = classification_loss(mlp_output[training_mask], node_labels[training_mask])
         loss_attention = classification_loss(attention_output[training_colors], color_labels[training_colors])
 
-        # Get the variance of the GNN embeddings for all the nodes in the same color
-        color_variances = []
-        # Iterate over each color
-        for color in range(n_colors):
-            # Find the color's nodes
-            color_nodes = (color_indices == color)
-            # Check if there are nodes for this color
-            if color_nodes.sum() < 1:
-                raise Exception(f"Color {color} with no nodes found in the graph.")
-            elif color_nodes.sum() == 1:
-                raise Exception(f"Color {color} with one node found in the graph.")
-            # Get the GNN embeddings for the color's nodes
-            color_embeddings_for_color = gnn_output[color_nodes]
-            # Find the variance of the GNN embeddings for the color's nodes
-            variance = torch.var(color_embeddings_for_color, dim=0).mean()
-            color_variances.append(variance)
-        # Sum the variances for all colors
-        total_variance = torch.mean(torch.stack(color_variances))
+        # 1. Calculate the mean per color (Vectorized)
+        # Create a zero tensor to store the sums
+        sums = torch.zeros(n_colors, gnn_output.size(1), device=DEVICE)
+        counts = torch.zeros(n_colors, 1, device=DEVICE)
+
+        # Sum up all embeddings belonging to each color index
+        # 'src' is your embeddings, 'index' is your color_indices
+        sums.scatter_add_(0, color_indices.unsqueeze(1).expand_as(gnn_output), gnn_output)
+        counts.scatter_add_(0, color_indices.unsqueeze(1), torch.ones_like(color_indices).unsqueeze(1).float())
+
+        # Avoid division by zero for colors with no nodes
+        counts = torch.clamp(counts, min=1.0)
+        color_means = sums / counts
+
+        # 2. Calculate the Variance: Var = E[X^2] - (E[X])^2
+        # Expand the means back to the shape of the original nodes
+        node_means = color_means[color_indices]
+        sq_diff = (gnn_output - node_means) ** 2
+
+        # Sum the squared differences per color
+        sq_diff_sums = torch.zeros(n_colors, gnn_output.size(1), device=DEVICE)
+        sq_diff_sums.scatter_add_(0, color_indices.unsqueeze(1).expand_as(sq_diff), sq_diff)
+
+        # Calculate final variance per color
+        color_variances = sq_diff_sums / counts
+        total_variance = color_variances.mean()
 
         # Combine the losses
         loss = ALPHA * loss_gnn + BETA * loss_attention + GAMMA * total_variance
@@ -160,22 +169,23 @@ def train(n_classes, n_colors, data):
             print(f"Early stopping at epoch {epoch} with best loss {best_loss:.4f}")
             break
 
-    # Calculate the accuracy for GNN and attention models on both training and testing sets
+    # Calculate the predictions and scores
     gnn_predictions = mlp_output.argmax(dim=1)
     attention_predictions = attention_output.argmax(dim=1)
+    gnn_scores = mlp_output.softmax(dim=1)[:, 1].detach().cpu().numpy()
+    attention_scores = attention_output.softmax(dim=1)[:, 1].detach().cpu().numpy()
+
+    # Calculate the accuracies for the attention model and the gnn
     train_gnn_accuracy = (gnn_predictions[training_mask] == node_labels[training_mask]).float().mean().item()
     train_attention_accuracy = (
             attention_predictions[training_colors] == color_labels[training_colors]).float().mean().item()
     test_gnn_accuracy = (gnn_predictions[~training_mask] == node_labels[~training_mask]).float().mean().item()
     test_attention_accuracy = (
             attention_predictions[~training_colors] == color_labels[~training_colors]).float().mean().item()
-    print(f"GNN Accuracy on Test Set: {test_gnn_accuracy:.4f}")
-    print(f"Attention Accuracy on Test Set: {test_attention_accuracy:.4f}")
-    print(f"GNN Accuracy on Training Set: {train_gnn_accuracy:.4f}")
-    print(f"Attention Accuracy on Training Set: {train_attention_accuracy:.4f}")
 
-    # Check AUC
-    attention_scores = attention_output.softmax(dim=1)[:, 1].detach().cpu().numpy()
+    # Calculate AUC-ROC for the attention model and the gnn over the training set
+    train_gnn_auc = roc_auc_score(node_labels[training_mask].cpu().numpy(), gnn_scores[training_mask.cpu().numpy()])
+    train_attention_auc = roc_auc_score(color_labels[training_colors].cpu().numpy(), attention_scores[training_colors.cpu().numpy()])
 
     # Set a dictionary for the results dict
     results_dct = {
@@ -184,7 +194,9 @@ def train(n_classes, n_colors, data):
         "test_gnn_accuracy": test_gnn_accuracy,
         "test_attention_accuracy": test_attention_accuracy,
         "attention_score": attention_scores[~training_colors].item(),
-        "test_labels": color_labels[~training_colors].cpu().numpy()
+        "test_labels": color_labels[~training_colors].cpu().numpy(),
+        "train_gnn_auc": train_gnn_auc,
+        "train_attention_auc": train_attention_auc,
     }
 
     # Plot the losses and variance
@@ -218,7 +230,8 @@ def main():
     # Set a results df
     results_df = pd.DataFrame(columns=["train_gnn_accuracy", "train_attention_accuracy",
                                        "test_gnn_accuracy", "test_attention_accuracy",
-                                       "attention_score", "test_labels"])
+                                       "attention_score", "test_labels",
+                                       "train_gnn_auc", "train_attention_auc"])
 
     # Train the model
     for i in tqdm(range(n_colors), desc="Training for each color", total=n_colors):
