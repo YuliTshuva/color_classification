@@ -257,8 +257,11 @@ def main():
                                        "attention_score", "test_labels",
                                        "train_gnn_auc", "train_attention_auc"])
 
+    # Set the test colors list
+    range_test_colors = list(range(n_colors))
+
     # Train the model
-    for i in tqdm(range(n_colors), desc="Training for each color", total=n_colors):
+    for i in tqdm(range_test_colors, desc="Training for each color", total=n_colors):
         # Define test labels
         test_colors = torch.tensor([i])
         # Train the model with the current test color
@@ -269,7 +272,7 @@ def main():
 
         # Save the results
         os.makedirs(RESULTS_DIR, exist_ok=True)
-        results_df.to_csv(join(RESULTS_DIR, "results.csv"), index=True)
+        results_df.to_csv(join(RESULTS_DIR, f"results_twitch_second_model.csv"), index=True)
 
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ from matplotlib import rcParams
 from sklearn.metrics import roc_auc_score, roc_curve
 
 # Constants
-RESULTS_PATH = join("results", "results.csv")
+RESULTS_PATH = join("results", "results_twitch_second_model.csv")
 rcParams["font.family"] = "Times New Roman"
 
 # Load results
