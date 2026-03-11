@@ -18,28 +18,28 @@ from constants import *
 class GNN(torch.nn.Module):
     def __init__(self, in_features, hidden_dim, out_features, K, dropout_rate: float):
         super().__init__()
-        self.dropout_rate = dropout_rate  # Store the rate
-        self.input_conv = GCNConv(in_features, hidden_dim)
+        self.dropout_rate = dropout_rate
+        self.k = K
+
         if K >= 3:
-            self.conv_layers = nn.ModuleList([GCNConv(hidden_dim, hidden_dim) for _ in range(K - 2)])
+            self.conv_layers = nn.ModuleList([GCNConv(in_features, hidden_dim)] +
+                                             [GCNConv(hidden_dim, hidden_dim) for _ in range(K - 2)] +
+                                             [GCNConv(hidden_dim, out_features)])
+        elif K == 2:
+            self.conv_layers = nn.ModuleList([GCNConv(in_features, hidden_dim), GCNConv(hidden_dim, out_features)])
+        elif K == 1:
+            self.conv_layers = nn.ModuleList([GCNConv(in_features, out_features)])
         else:
-            self.conv_layers = []
-        self.output_conv = GCNConv(hidden_dim, out_features)
+            raise NotImplementedError
 
     def forward(self, x, edge_index):
-        # Input layer
-        x = self.input_conv(x, edge_index)
-        x = F.relu(x)
-        x = F.dropout(x, p=self.dropout_rate, training=self.training)  # Dropout here
-
         # Hidden layers
-        for conv in self.conv_layers:
+        for i, conv in enumerate(self.conv_layers):
             x = conv(x, edge_index)
-            x = F.relu(x)
-            x = F.dropout(x, p=self.dropout_rate, training=self.training)
+            if i < len(self.conv_layers) - 1:
+                x = F.relu(x)
+                x = F.dropout(x, p=self.dropout_rate, training=self.training)
 
-        # Output layer
-        x = self.output_conv(x, edge_index)
         return x
 
 

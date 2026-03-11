@@ -49,7 +49,8 @@ def twitch_data_analysis():
     color_counts = torch.bincount(color_indices)
     # Plot the distribution of colors
     plt.figure(figsize=(10, 6))
-    plt.bar(range(len(color_counts)), color_counts.numpy(), color='skyblue', edgecolor='black')
+    # Create a bar plot for the distribution of colors in log scale
+    plt.bar(range(len(color_counts)), color_counts.numpy(), color='skyblue', edgecolor='black', log=True)
     plt.xlabel('Color Index (Language)', fontsize=15)
     plt.ylabel('Number of Vertices', fontsize=15)
     plt.title('Distribution of Colors (Languages) in Twitch Dataset', fontsize=20)
