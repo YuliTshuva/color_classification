@@ -236,7 +236,7 @@ def objective(trial):
         "gnn_embedding_dim": trial.suggest_categorical("gnn_embedding_dim", [16, 24, 32, 48, 64, 100]),
         "gnn_hidden_dim": trial.suggest_categorical("gnn_hidden_dim", [8, 12, 16, 24, 32, 48]),
         "k_gnn_layers": trial.suggest_categorical("k_gnn_layers", [1, 2, 3]),
-        "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", [[2, 2], [4], [8], [10]]),
+        "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", [(2, 2), (4,), (8,), (10,)]),
         "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
         "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
         "alpha": trial.suggest_categorical("alpha", [1e-4, 1e-3, 1e-2, 0.1, 1, 1e1, 1e2, 1e3]),
@@ -252,7 +252,7 @@ def objective(trial):
     for i in range(n_colors):
         test_colors = torch.tensor([i])
         # Pass the 'config' dictionary into your train function
-        _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), **config)
+        _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), hps=config)
 
         test_accs.append(result_dct["test_gnn_accuracy"])
         test_labels.append(result_dct["test_label"])
@@ -264,7 +264,7 @@ def objective(trial):
 def main():
     # Create a study to MAXIMIZE AUC
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=20)  # Set trials based on your time budget
+    study.optimize(objective, n_trials=2)  # Set trials based on your time budget
 
     print("Best AUC:", study.best_value)
     print("Best params:", study.best_params)
