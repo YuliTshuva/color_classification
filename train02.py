@@ -13,12 +13,15 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 import numpy as np
 
+# Create a random seed for reproducibility
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+
 # Set the font for the plots
 rcParams['font.family'] = "Times New Roman"
 
 # Hyperparameters
 EPOCHS = 10000
-ALPHA, GAMMA = 1, 1
 LR = 0.001
 TOLERANCE = 30
 
@@ -235,7 +238,7 @@ def main():
                                        "test_labels", "train_gnn_auc"])
 
     # Set the test colors list
-    range_test_colors = list(range(n_colors))
+    range_test_colors = [2, 3, 4, 10, 12, 15]
 
     # Train the model
     for i in tqdm(range_test_colors, desc="Training for each color", total=n_colors):
@@ -248,7 +251,7 @@ def main():
 
         # Save the results
         os.makedirs(RESULTS_DIR, exist_ok=True)
-        results_df.to_csv(join(RESULTS_DIR, f"results_twitch_third_model.csv"), index=True)
+        results_df.to_csv(join(RESULTS_DIR, f"results_twitch_forth_model.csv"), index=True)
 
 
 if __name__ == '__main__':

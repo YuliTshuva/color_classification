@@ -3,7 +3,7 @@ from os.path import join
 
 # Hyperparameters
 COLOR_EMBEDDING_DIM = 4
-GNN_EMBEDDING_DIM = 16
+GNN_EMBEDDING_DIM = 32
 GNN_HIDDEN_DIM = 16
 K_GNN_LAYERS = 1
 GNN_MLP_HIDDEN_DIMS = [8]
@@ -12,6 +12,7 @@ GNN_MLP_HIDDEN_DIMS = [8]
 GNN_DROPOUT_RATE = 0.3
 # ATTENTION_DROPOUT_RATE = 0.7
 MLP_DROPOUT_RATE = 0.3
+ALPHA, GAMMA = 1, 1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DATA_DIR = "data"
 DATASET_NAME = "twitch"
