@@ -3,3 +3,4 @@ tqdm
 pandas
 torch-geometric
 matplotlib
+optuna
