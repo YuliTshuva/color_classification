@@ -12,6 +12,7 @@ from tqdm.auto import tqdm
 from sklearn.metrics import roc_auc_score
 import optuna
 
+
 # Create a random seed for reproducibility
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
@@ -29,7 +30,6 @@ def train(train_id, n_colors, data, hps):
     """
     Get the data and train the models for color classification.
     :param data: edge_index (2, edges), color_indices (n_vertices,), labels (n_colors,)
-    :param n_classes: Amount of classes to classify the colors into.
     :param n_colors: Amount of colors in the dataset.
     :return: The trained models: GNN, MLP, Color Embedding, Attention Classifier.
     """
@@ -229,44 +229,53 @@ def train(train_id, n_colors, data, hps):
     return gnn_model, mlp_model, color_embedding_model, results_dct
 
 
-def main():
-    hp_grid = {
-        "color_embedding_dim": [2, 3, 4, 5, 6, 8, 10],
-        "gnn_embedding_dim": [16, 24, 32, 48, 64, 100],
-        "gnn_hidden_dim": [8, 12, 16, 24, 32, 48],
-        "k_gnn_layers": [1, 2, 3],
-        "gnn_mlp_hidden_dims": [[2, 2], [4], [8], [10]],
-        "gnn_dropout_rate": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
-        "mlp_dropout_rate": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
-        "alpha": [1e-4, 1e-3, 1e-2, 0.1, 1, 1e1, 1e2, 1e3],
+def objective(trial):
+    # 1. Define the HP space using your grid
+    config = {
+        "color_embedding_dim": trial.suggest_categorical("color_embedding_dim", [2, 3, 4, 5, 6, 8, 10]),
+        "gnn_embedding_dim": trial.suggest_categorical("gnn_embedding_dim", [16, 24, 32, 48, 64, 100]),
+        "gnn_hidden_dim": trial.suggest_categorical("gnn_hidden_dim", [8, 12, 16, 24, 32, 48]),
+        "k_gnn_layers": trial.suggest_categorical("k_gnn_layers", [1, 2, 3]),
+        "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", [[2, 2], [4], [8], [10]]),
+        "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
+        "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
+        "alpha": trial.suggest_categorical("alpha", [1e-4, 1e-3, 1e-2, 0.1, 1, 1e1, 1e2, 1e3]),
     }
 
-    # Load the Twitch dataset
+    # Load data (Better to do this outside objective if it's heavy)
     edge_index, color_indices, labels = load_twitch_data()
-
-    # Find n_colors by the length of the labels
     n_colors = len(labels)
 
-    # Set the test colors list
-    range_test_colors = range(n_colors)  # Use all colors for testing, one at a time
-
-    # Set a list for the test labels and acc
     test_accs, test_labels = [], []
 
-    # Train the model
-    for i in tqdm(range_test_colors, desc="Training for each color", total=n_colors):
-        # Define test labels
+    # 2. Run your evaluation loop
+    for i in range(n_colors):
         test_colors = torch.tensor([i])
-        # Train the model with the current test color
-        _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors))
-        # Extract the test acc
+        # Pass the 'config' dictionary into your train function
+        _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), **config)
+
         test_accs.append(result_dct["test_gnn_accuracy"])
         test_labels.append(result_dct["test_label"])
 
-    # Calculate the auc between the lists
-    hp_auc = roc_auc_score(test_labels, test_accs)
+    # 3. Calculate the metric to maximize
+    return roc_auc_score(test_labels, test_accs)
 
 
+def main():
+    # Create a study to MAXIMIZE AUC
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=20)  # Set trials based on your time budget
 
-if __name__ == '__main__':
+    print("Best AUC:", study.best_value)
+    print("Best params:", study.best_params)
+
+    # Save the best hyperparameters to a file
+    with open(join(MODELS_DIR, "best_hyperparameters.txt"), "w") as f:
+        f.write(f"Best AUC: {study.best_value}\n")
+        f.write("Best Hyperparameters:\n")
+        for key, value in study.best_params.items():
+            f.write(f"{key}: {value}\n")
+
+
+if __name__ == "__main__":
     main()
