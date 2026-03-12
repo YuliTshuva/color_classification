@@ -11,7 +11,8 @@ from utils import *
 from tqdm.auto import tqdm
 from sklearn.metrics import roc_auc_score
 import optuna
-
+import pandas as pd
+import numpy as np
 
 # Create a random seed for reproducibility
 torch.manual_seed(42)
@@ -196,6 +197,12 @@ def train(train_id, n_colors, data, hps):
     gnn_scores = torch.sigmoid(mlp_output).squeeze()
     gnn_predictions = (gnn_scores > 0.5).long()
 
+    # Create a dir to save the scores
+    os.makedirs(SCORES_DIR, exist_ok=True)
+    # Save the scores for the current test color
+    np.save(join(SCORES_DIR, f"gnn_train_scores_{train_id}.npy"), gnn_scores[training_mask].cpu().numpy())
+    np.save(join(SCORES_DIR, f"gnn_test_scores_{train_id}.npy"), gnn_scores[~training_mask].cpu().numpy())
+
     # Calculate the accuracies for the attention model and the gnn
     node_labels = node_labels.long()
     train_gnn_accuracy = (gnn_predictions[training_mask] == node_labels[training_mask]).float().mean().item()
@@ -254,14 +261,14 @@ def objective(trial):
         # Pass the 'config' dictionary into your train function
         _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), hps=config)
 
-        test_accs.append(result_dct["test_gnn_accuracy"])
+        test_accs.append(result_dct["test_gnn_accuracy"] if 1 == int(result_dct["test_label"]) else 1 - result_dct["test_gnn_accuracy"])
         test_labels.append(result_dct["test_label"])
 
     # 3. Calculate the metric to maximize
     return roc_auc_score(test_labels, test_accs)
 
 
-def main():
+def hp_optimization():
     # Create a study to MAXIMIZE AUC
     study = optuna.create_study(direction="maximize")
     study.optimize(objective, n_trials=2)  # Set trials based on your time budget
@@ -277,5 +284,32 @@ def main():
             f.write(f"{key}: {value}\n")
 
 
+def main():
+    # 1. Define the HP space using your grid
+    config = {
+        'color_embedding_dim': 10, 'gnn_embedding_dim': 16, 'gnn_hidden_dim': 8, 'k_gnn_layers': 2,
+        'gnn_mlp_hidden_dims': [4], 'gnn_dropout_rate': 0.2, 'mlp_dropout_rate': 0.3, 'alpha': 0.01}
+
+    # Load data (Better to do this outside objective if it's heavy)
+    edge_index, color_indices, labels = load_twitch_data()
+    n_colors = len(labels)
+
+    # Set a df for the results
+    results_df = pd.DataFrame(columns=["train_gnn_accuracy", "test_gnn_accuracy", "test_label", "train_gnn_auc"])
+
+    # 2. Run your evaluation loop
+    for i in range(n_colors):
+        test_colors = torch.tensor([i])
+        # Pass the 'config' dictionary into your train function
+        _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), hps=config)
+
+        # Append the results to the results df
+        results_df.loc[i] = result_dct
+
+        # Save the results
+        os.makedirs(RESULTS_DIR, exist_ok=True)
+        results_df.to_csv(join(RESULTS_DIR, f"results_twitch_forth_model.csv"), index=True)
+
+
 if __name__ == "__main__":
-    main()
+    hp_optimization()
