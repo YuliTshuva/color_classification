@@ -21,6 +21,7 @@ EDGES_PATH = join(DATA_DIR, "large_twitch_edges.csv")
 NODES_PATH = join(DATA_DIR, "large_twitch_features.csv")
 MODELS_DIR = "models"
 RESULTS_DIR = "results"
+RESULTS_DICT = join(RESULTS_DIR, "hp_results.json")
 LATIN_LANGUAGES = {
     "EN", "FR", "DE", "ES", "IT", "PT",
     "PL", "NL", "SV", "DA", "FI", "NO",

@@ -13,6 +13,7 @@ from sklearn.metrics import roc_auc_score
 import optuna
 import pandas as pd
 import numpy as np
+import json
 
 # Create a random seed for reproducibility
 torch.manual_seed(42)
@@ -25,6 +26,10 @@ rcParams['font.family'] = "Times New Roman"
 EPOCHS = 10000
 LR = 0.001
 TOLERANCE = 30
+
+# Load data (Better to do this outside objective if it's heavy)
+edge_index, color_indices, labels = load_twitch_data()
+n_colors = len(labels)
 
 
 def train(train_id, n_colors, data, hps):
@@ -105,7 +110,7 @@ def train(train_id, n_colors, data, hps):
     best_loss, unimproved_epochs = torch.inf, 0
 
     # Start the training loop
-    for epoch in tqdm(range(EPOCHS), desc="Training", total=EPOCHS):
+    for epoch in range(EPOCHS):
         # Embed the color indices for GNN input
         color_embeddings = color_embedding_model(color_indices)
 
@@ -169,7 +174,7 @@ def train(train_id, n_colors, data, hps):
         else:
             unimproved_epochs += 1
         if unimproved_epochs >= TOLERANCE:
-            print(f"Early stopping at epoch {epoch} with best loss {best_loss:.4f}")
+            # print(f"Early stopping at epoch {epoch} with best loss {best_loss:.4f}")
             break
 
     # Load the best models
@@ -196,12 +201,6 @@ def train(train_id, n_colors, data, hps):
     # Calculate the predictions and scores
     gnn_scores = torch.sigmoid(mlp_output).squeeze()
     gnn_predictions = (gnn_scores > 0.5).long()
-
-    # Create a dir to save the scores
-    os.makedirs(SCORES_DIR, exist_ok=True)
-    # Save the scores for the current test color
-    np.save(join(SCORES_DIR, f"gnn_train_scores_{train_id}.npy"), gnn_scores[training_mask].cpu().numpy())
-    np.save(join(SCORES_DIR, f"gnn_test_scores_{train_id}.npy"), gnn_scores[~training_mask].cpu().numpy())
 
     # Calculate the accuracies for the attention model and the gnn
     node_labels = node_labels.long()
@@ -249,10 +248,19 @@ def objective(trial):
         "alpha": trial.suggest_categorical("alpha", [1e-4, 1e-3, 1e-2, 0.1, 1, 1e1, 1e2, 1e3]),
     }
 
-    # Load data (Better to do this outside objective if it's heavy)
-    edge_index, color_indices, labels = load_twitch_data()
-    n_colors = len(labels)
+    # Load the results dict
+    try:
+        with open(RESULTS_DICT, "r") as f:
+            dct = json.load(f)
+    except:
+        dct = {}
 
+    for sub_dict in dct.values():
+        if sub_dict["config"] == config:
+            return float(sub_dict["auc_score"])
+
+    # Set a df for the results
+    results_df = pd.DataFrame(columns=["train_gnn_accuracy", "test_gnn_accuracy", "test_label", "train_gnn_auc"])
     test_accs, test_labels = [], []
 
     # 2. Run your evaluation loop
@@ -261,17 +269,39 @@ def objective(trial):
         # Pass the 'config' dictionary into your train function
         _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), hps=config)
 
-        test_accs.append(result_dct["test_gnn_accuracy"] if 1 == int(result_dct["test_label"]) else 1 - result_dct["test_gnn_accuracy"])
+        test_accs.append(result_dct["test_gnn_accuracy"] if 1 == int(result_dct["test_label"]) else 1 - result_dct[
+            "test_gnn_accuracy"])
         test_labels.append(result_dct["test_label"])
 
+        # Append the results to the results df
+        results_df.loc[i] = result_dct
+
     # 3. Calculate the metric to maximize
-    return roc_auc_score(test_labels, test_accs)
+    auc_score = roc_auc_score(test_labels, test_accs)
+
+    max_id = max(list(dct.keys()) + [0]) + 1
+    dct[max_id] = {
+        "config": config,
+        "auc_score": auc_score,
+    }
+
+    # Save the results dict
+    with open(RESULTS_DICT, "w") as f:
+        json.dump(dct, f, indent=4)
+
+    # Save the results
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    results_df.to_csv(join(RESULTS_DIR, f"results_twitch_model_{max_id}.csv"), index=True)
+
+    print(f"Trial {max_id} completed with AUC:", auc_score)
+
+    return auc_score
 
 
 def hp_optimization():
     # Create a study to MAXIMIZE AUC
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=2)  # Set trials based on your time budget
+    study.optimize(objective, n_trials=100)  # Set trials based on your time budget
 
     print("Best AUC:", study.best_value)
     print("Best params:", study.best_params)
@@ -306,9 +336,9 @@ def main():
         # Append the results to the results df
         results_df.loc[i] = result_dct
 
-        # Save the results
-        os.makedirs(RESULTS_DIR, exist_ok=True)
-        results_df.to_csv(join(RESULTS_DIR, f"results_twitch_forth_model.csv"), index=True)
+    # Save the results
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    results_df.to_csv(join(RESULTS_DIR, f"results_twitch_forth_model.csv"), index=True)
 
 
 if __name__ == "__main__":
