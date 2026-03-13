@@ -9,6 +9,7 @@ from matplotlib import rcParams
 from sklearn.metrics import roc_auc_score, roc_curve
 from constants import *
 import numpy as np
+import optuna
 
 # Constants
 RESULTS_PATH = join("results", "results_twitch_third_model.csv")
@@ -72,7 +73,17 @@ def find_optimal_threshold():
 
 
 def main():
-    find_optimal_threshold()
+    storage_name = "sqlite:///optuna_study.db"
+    study_name = "twitch_optimization"  # Use your actual study name
+
+    study = optuna.load_study(study_name=study_name, storage=storage_name)
+    df = study.trials_dataframe()
+
+    # Show the top 5 best trials
+    print(df.sort_values("value", ascending=False).head())
+
+    # To save it to CSV for easy viewing in Excel:
+    # df.to_csv("study_results.csv")
 
 
 if __name__ == "__main__":

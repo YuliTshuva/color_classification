@@ -26,6 +26,16 @@ rcParams['font.family'] = "Times New Roman"
 EPOCHS = 10000
 LR = 0.001
 TOLERANCE = 30
+ARCH_MAP = {
+    "small_double": (2, 2),
+    "four": (4,),
+    "double_four": (4, 4),
+    "six": (6,),
+    "eight": (8,),
+    "ten": (10,),
+    "twelve": (12,),
+    "sixteen": (16,),
+}
 
 # Load data (Better to do this outside objective if it's heavy)
 edge_index, color_indices, labels = load_twitch_data()
@@ -109,6 +119,10 @@ def train(train_id, n_colors, data, hps):
     # Set a variable to store the best loss achieved
     best_loss, unimproved_epochs = torch.inf, 0
 
+    counts = torch.zeros(n_colors, 1, device=DEVICE)
+    counts.scatter_add_(0, color_indices.unsqueeze(1), torch.ones_like(color_indices).unsqueeze(1).float())
+    counts = torch.clamp(counts, min=1.0)
+
     # Start the training loop
     for epoch in range(EPOCHS):
         # Embed the color indices for GNN input
@@ -126,15 +140,12 @@ def train(train_id, n_colors, data, hps):
         # 1. Calculate the mean per color (Vectorized)
         # Create a zero tensor to store the sums
         sums = torch.zeros(n_colors, gnn_output.size(1), device=DEVICE)
-        counts = torch.zeros(n_colors, 1, device=DEVICE)
 
         # Sum up all embeddings belonging to each color index
         # 'src' is your embeddings, 'index' is your color_indices
         sums.scatter_add_(0, color_indices.unsqueeze(1).expand_as(gnn_output), gnn_output)
-        counts.scatter_add_(0, color_indices.unsqueeze(1), torch.ones_like(color_indices).unsqueeze(1).float())
 
         # Avoid division by zero for colors with no nodes
-        counts = torch.clamp(counts, min=1.0)
         color_means = sums / counts
 
         # 2. Calculate the Variance: Var = E[X^2] - (E[X])^2
@@ -236,13 +247,19 @@ def train(train_id, n_colors, data, hps):
 
 
 def objective(trial):
+    # Suggest a string instead of a tuple
+    arch_key = trial.suggest_categorical("gnn_mlp_hidden_dims_key", list(ARCH_MAP.keys()))
+
+    # Get the actual tuple to pass to your model
+    gnn_mlp_hidden_dims = ARCH_MAP[arch_key]
+
     # 1. Define the HP space using your grid
     config = {
         "color_embedding_dim": trial.suggest_categorical("color_embedding_dim", [2, 3, 4, 5, 6, 8, 10]),
         "gnn_embedding_dim": trial.suggest_categorical("gnn_embedding_dim", [16, 24, 32, 48, 64, 100]),
         "gnn_hidden_dim": trial.suggest_categorical("gnn_hidden_dim", [8, 12, 16, 24, 32, 48]),
         "k_gnn_layers": trial.suggest_categorical("k_gnn_layers", [1, 2, 3]),
-        "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", [(2, 2), (4,), (8,), (10,)]),
+        "gnn_mlp_hidden_dims": gnn_mlp_hidden_dims,
         "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
         "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
         "alpha": trial.suggest_categorical("alpha", [1e-4, 1e-3, 1e-2, 0.1, 1, 1e1, 1e2, 1e3]),
@@ -265,6 +282,7 @@ def objective(trial):
 
     # 2. Run your evaluation loop
     for i in range(n_colors):
+        print("Testing color:", i)
         test_colors = torch.tensor([i])
         # Pass the 'config' dictionary into your train function
         _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), hps=config)
@@ -279,7 +297,7 @@ def objective(trial):
     # 3. Calculate the metric to maximize
     auc_score = roc_auc_score(test_labels, test_accs)
 
-    max_id = max(list(dct.keys()) + [0]) + 1
+    max_id = max([int(a) for a in list(dct.keys())] + [0]) + 1
     dct[max_id] = {
         "config": config,
         "auc_score": auc_score,
