@@ -136,7 +136,7 @@ def train(train_id, n_colors, data):
         total_variance = color_variances.mean()
 
         # Combine the losses
-        loss = ALPHA * loss_gnn + GAMMA * total_variance
+        loss = ALPHA * loss_gnn + total_variance
 
         # Backpropagation
         optimizer.zero_grad()
@@ -209,19 +209,19 @@ def train(train_id, n_colors, data):
         "train_gnn_auc": train_gnn_auc,
     }
 
-    # Plot the losses and variance
-    plt.figure(figsize=(7, 6))
-    plt.plot(losses_gnn, label=f'GNN Loss', color="dodgerblue")
-    plt.plot(variances, label='Variance', color="turquoise")
-    plt.plot(losses_total, label='Total Loss', color="salmon")
-    plt.xlabel('Epoch', fontsize=16)
-    plt.ylabel('Loss Value', fontsize=16)
-    plt.title('Training Losses', fontsize=22)
-    plt.legend(fontsize=14)
-    plt.grid()
-    plt.tight_layout()
-    plt.savefig(join("plots", f"training_losses_{'_'.join([str(element.item()) for element in test_colors])}.png"))
-    plt.close()
+    # # Plot the losses and variance
+    # plt.figure(figsize=(7, 6))
+    # plt.plot(losses_gnn, label=f'GNN Loss', color="dodgerblue")
+    # plt.plot(variances, label='Variance', color="turquoise")
+    # plt.plot(losses_total, label='Total Loss', color="salmon")
+    # plt.xlabel('Epoch', fontsize=16)
+    # plt.ylabel('Loss Value', fontsize=16)
+    # plt.title('Training Losses', fontsize=22)
+    # plt.legend(fontsize=14)
+    # plt.grid()
+    # plt.tight_layout()
+    # plt.savefig(join("plots", f"training_losses_{'_'.join([str(element.item()) for element in test_colors])}.png"))
+    # plt.close()
 
     return gnn_model, mlp_model, color_embedding_model, results_dct
 
@@ -238,7 +238,7 @@ def main():
                                        "test_labels", "train_gnn_auc"])
 
     # Set the test colors list
-    range_test_colors = [2, 3, 4, 10, 12, 15]
+    range_test_colors = range(n_colors)
 
     # Train the model
     for i in tqdm(range_test_colors, desc="Training for each color", total=n_colors):
@@ -251,7 +251,7 @@ def main():
 
         # Save the results
         os.makedirs(RESULTS_DIR, exist_ok=True)
-        results_df.to_csv(join(RESULTS_DIR, f"results_twitch_forth_model.csv"), index=True)
+        results_df.to_csv(join(RESULTS_DIR, f"results_twitch_fifth_model.csv"), index=True)
 
 
 if __name__ == '__main__':

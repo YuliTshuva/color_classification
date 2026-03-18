@@ -27,14 +27,7 @@ EPOCHS = 10000
 LR = 0.001
 TOLERANCE = 30
 ARCH_MAP = {
-    "small_double": (2, 2),
-    "four": (4,),
-    "double_four": (4, 4),
-    "six": (6,),
-    "eight": (8,),
-    "ten": (10,),
     "twelve": (12,),
-    "sixteen": (16,),
 }
 
 # Load data (Better to do this outside objective if it's heavy)
@@ -255,15 +248,17 @@ def objective(trial):
 
     # 1. Define the HP space using your grid
     config = {
-        "color_embedding_dim": trial.suggest_categorical("color_embedding_dim", [2, 3, 4, 5, 6, 8, 10]),
-        "gnn_embedding_dim": trial.suggest_categorical("gnn_embedding_dim", [16, 24, 32, 48, 64, 100]),
-        "gnn_hidden_dim": trial.suggest_categorical("gnn_hidden_dim", [8, 12, 16, 24, 32, 48]),
-        "k_gnn_layers": trial.suggest_categorical("k_gnn_layers", [1, 2, 3]),
+        "color_embedding_dim": trial.suggest_categorical("color_embedding_dim", [3, 5, 4]),
+        "gnn_embedding_dim": trial.suggest_categorical("gnn_embedding_dim", [28, 32, 36]),
+        "gnn_hidden_dim": trial.suggest_categorical("gnn_hidden_dim", [-1]),
+        "k_gnn_layers": trial.suggest_categorical("k_gnn_layers", [1]),
         "gnn_mlp_hidden_dims": gnn_mlp_hidden_dims,
-        "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
-        "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]),
-        "alpha": trial.suggest_categorical("alpha", [1e-4, 1e-3, 1e-2, 0.1, 1, 1e1, 1e2, 1e3]),
+        "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", [0.0]),
+        "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", [0.1]),
+        "alpha": trial.suggest_categorical("alpha", [1e3, 1e4, 1e5]),
     }
+
+    print("Testing config:", config)
 
     # Load the results dict
     try:
@@ -278,29 +273,24 @@ def objective(trial):
 
     # Set a df for the results
     results_df = pd.DataFrame(columns=["train_gnn_accuracy", "test_gnn_accuracy", "test_label", "train_gnn_auc"])
-    test_accs, test_labels = [], []
 
     # 2. Run your evaluation loop
-    for i in range(n_colors):
+    for i in [2, 3, 4, 10, 12, 15]:
         print("Testing color:", i)
         test_colors = torch.tensor([i])
         # Pass the 'config' dictionary into your train function
         _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), hps=config)
 
-        test_accs.append(result_dct["test_gnn_accuracy"] if 1 == int(result_dct["test_label"]) else 1 - result_dct[
-            "test_gnn_accuracy"])
-        test_labels.append(result_dct["test_label"])
-
         # Append the results to the results df
         results_df.loc[i] = result_dct
 
     # 3. Calculate the metric to maximize
-    auc_score = roc_auc_score(test_labels, test_accs)
+    sum_acc = float(results_df["test_gnn_accuracy"].sum())
 
     max_id = max([int(a) for a in list(dct.keys())] + [0]) + 1
     dct[max_id] = {
         "config": config,
-        "auc_score": auc_score,
+        "sum_acc": sum_acc,
     }
 
     # Save the results dict
@@ -311,9 +301,9 @@ def objective(trial):
     os.makedirs(RESULTS_DIR, exist_ok=True)
     results_df.to_csv(join(RESULTS_DIR, f"results_twitch_model_{max_id}.csv"), index=True)
 
-    print(f"Trial {max_id} completed with AUC:", auc_score)
+    print(f"Trial {max_id} completed with AUC:", sum_acc)
 
-    return auc_score
+    return sum_acc
 
 
 def hp_optimization():
@@ -330,33 +320,6 @@ def hp_optimization():
         f.write("Best Hyperparameters:\n")
         for key, value in study.best_params.items():
             f.write(f"{key}: {value}\n")
-
-
-def main():
-    # 1. Define the HP space using your grid
-    config = {
-        'color_embedding_dim': 10, 'gnn_embedding_dim': 16, 'gnn_hidden_dim': 8, 'k_gnn_layers': 2,
-        'gnn_mlp_hidden_dims': [4], 'gnn_dropout_rate': 0.2, 'mlp_dropout_rate': 0.3, 'alpha': 0.01}
-
-    # Load data (Better to do this outside objective if it's heavy)
-    edge_index, color_indices, labels = load_twitch_data()
-    n_colors = len(labels)
-
-    # Set a df for the results
-    results_df = pd.DataFrame(columns=["train_gnn_accuracy", "test_gnn_accuracy", "test_label", "train_gnn_auc"])
-
-    # 2. Run your evaluation loop
-    for i in range(n_colors):
-        test_colors = torch.tensor([i])
-        # Pass the 'config' dictionary into your train function
-        _, _, _, result_dct = train(i, n_colors, data=(edge_index, color_indices, labels, test_colors), hps=config)
-
-        # Append the results to the results df
-        results_df.loc[i] = result_dct
-
-    # Save the results
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    results_df.to_csv(join(RESULTS_DIR, f"results_twitch_forth_model.csv"), index=True)
 
 
 if __name__ == "__main__":
