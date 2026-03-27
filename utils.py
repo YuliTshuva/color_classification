@@ -42,6 +42,48 @@ def load_twitch_data():
     return edge_index, color_indices, labels
 
 
+def load_vae_extracted_data():
+    """
+    edge_index: (2, num_edges)
+    color_indices: (num_vertices,)
+    labels: (num_colors,)
+    :return:
+    """
+    # Load the edges
+    with open(VAE_EDGES, "r") as f:
+        edges_text = f.read()
+    edges = []
+    for edge in edges_text.split("\n"):
+        if len(edge) == 0:
+            continue
+        source, target = map(int, edge.strip().split())
+        edges.append((source, target))
+    edge_index = torch.tensor(edges, dtype=torch.long).T  # Shape: (2, num_edges)
+
+    # Load the color indices
+    with open(VAE_NODES, "r") as f:
+        color_indices_text = f.read()
+    color_indices = []
+    for line in color_indices_text.split("\n"):
+        if len(line) == 0:
+            continue
+        color_indices.append(int(line.strip().split()[1]))  # Assuming the format is "node_id color_index"
+    color_indices = torch.tensor(color_indices, dtype=torch.long)  # Shape: (num_vertices,)
+
+    # Load the labels
+    with open(VAE_LABELS, "r") as f:
+        labels_text = f.read()
+    labels = []
+    for line in labels_text.split("\n"):
+        if len(line) == 0:
+            continue
+        labels.append(int(line.strip().split()[1]))  # Assuming the format is "color_index label"
+    labels = torch.tensor(labels, dtype=torch.long)  # Shape: (num_colors,)
+
+    return edge_index, color_indices, labels
+
+
+
 def twitch_data_analysis():
     # Load the Twitch dataset
     _, color_indices, labels = load_twitch_data()
