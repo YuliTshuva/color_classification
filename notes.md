@@ -16,5 +16,4 @@ train04.py is the training for the new data (VAE-KNN)
 
 Yoram's innovations:
 * train05.py is the training code for the weight in the BCE.
-* train06.py is the training code for subsampling. 
-* train07.py is the training code for the new edges and RGCN.
+* train06.py is the training code for the new edges and RGCN.

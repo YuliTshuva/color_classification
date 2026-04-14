@@ -5,12 +5,10 @@ By convention the last color is used for testing.
 """
 
 # Imports
-import os
 from models import *
 from utils import *
-from tqdm.auto import tqdm
-import pandas as pd
 from sklearn.metrics import roc_auc_score
+import json
 
 # Create a random seed for reproducibility
 torch.manual_seed(42)
@@ -26,11 +24,10 @@ TOLERANCE = 30
 GAMMA = 100
 
 
-def train(n_colors, data, tested_color):
+def train(n_colors, data):
     """
     Get the data and train the models for color classification.
     :param data: edge_index (2, edges), color_indices (n_vertices,), labels (n_colors,)
-    :param n_classes: Amount of classes to classify the colors into.
     :param n_colors: Amount of colors in the dataset.
     :return: The trained models: GNN, MLP, Color Embedding, Attention Classifier.
     """
@@ -205,35 +202,32 @@ def train(n_colors, data, tested_color):
     att_scores = torch.sigmoid(attention_output).squeeze()
     att_predictions = (att_scores > 0.5).long()
 
-    # Get the tested color mask
-    tested_color_mask = torch.isin(color_indices, tested_color)
-
     # Calculate the accuracies for the attention model and the gnn
     node_labels = node_labels.long()
     color_labels = color_labels.long()
     train_gnn_accuracy = (gnn_predictions[training_mask] == node_labels[training_mask]).float().mean().item()
-    test_gnn_accuracy = (gnn_predictions[tested_color_mask] == node_labels[tested_color_mask]).float().mean().item()
+    test_gnn_accuracy = (gnn_predictions[~training_mask] == node_labels[~training_mask]).float().mean().item()
     train_att_acc = (att_predictions[training_colors] == color_labels[training_colors]).float().mean().item()
-    test_gnn_mean_score = (gnn_predictions[tested_color_mask]).float().mean().item()
-    test_gnn_var_score = (gnn_predictions[tested_color_mask]).float().var().item()
-    test_att_mean_score = (att_predictions[tested_color]).float().mean().item()
+    test_att_acc = (att_predictions[~training_colors] == color_labels[~training_colors]).float().mean().item()
 
     # Calculate AUC-ROC for the attention model and the gnn over the training set
     train_gnn_auc = roc_auc_score(node_labels[training_mask].cpu().numpy(), gnn_scores[training_mask].cpu().numpy())
     train_att_auc = roc_auc_score(color_labels[training_colors].cpu().numpy(),
                                   att_scores[training_colors].cpu().numpy())
+    test_gnn_auc = roc_auc_score(node_labels[~training_mask].cpu().numpy(), gnn_scores[~training_mask].cpu().numpy())
+    test_att_auc = roc_auc_score(color_labels[~training_colors].cpu().numpy(),
+                                 att_scores[~training_colors].cpu().numpy())
 
     # Set a dictionary for the results dict
     results_dct = {
         "train_gnn_accuracy": train_gnn_accuracy,
         "test_gnn_accuracy": test_gnn_accuracy,
-        "test_labels": color_labels[~training_colors].cpu().numpy()[0],
         "train_gnn_auc": train_gnn_auc,
+        "test_gnn_auc": test_gnn_auc,
         "train_att_accuracy": train_att_acc,
+        "test_att_accuracy": test_att_acc,
         "train_att_auc": train_att_auc,
-        "test_gnn_mean_score": test_gnn_mean_score,
-        "test_gnn_var_score": test_gnn_var_score,
-        "test_att_mean_score": test_att_mean_score,
+        "test_att_auc": test_att_auc,
     }
 
     return gnn_model, mlp_model, color_embedding_model, results_dct
@@ -241,48 +235,22 @@ def train(n_colors, data, tested_color):
 
 def main():
     # Load the Twitch dataset
-    edge_index, color_indices, labels, split = load_supervised_graph_data(llm="MiniLM-L6")
+    llm = "MiniLM-L6"
+    edge_index, color_indices, labels, split = load_supervised_graph_data(llm=llm)
 
     # Find n_colors by the length of the labels
     n_colors = len(labels)
-
-    # Set a results df
-    results_df = pd.DataFrame(columns=["test_color", "test_labels", "train_gnn_accuracy", "train_gnn_auc",
-                                       "train_att_accuracy", "train_att_auc", "test_gnn_accuracy",
-                                       "test_att_mean_score", "test_att_var_score",
-                                       "test_gnn_mean_score"])
 
     # Set the test colors list
     test_nodes = split == 1
     test_colors = color_indices[test_nodes].unique()
 
-    # Narrow the edges such that it will only contain nodes from the training colors
-    training_nodes = torch.isin(color_indices, test_colors, invert=True)
-    training_edge_mask = training_nodes[edge_index[0]] & training_nodes[edge_index[1]]
-    train_edge_index = edge_index[:, training_edge_mask]
-
-    # Train the model
-    count = 0
-    for test_color in tqdm(test_colors, desc="Iterating through test colors", total=len(test_colors)):
-        # Find the edges that contain the test color
-        test_color_mask = (color_indices == test_color)
-        test_edge_mask = test_color_mask[edge_index[0]] | test_color_mask[edge_index[1]]
-        test_edge_index = edge_index[:, test_edge_mask]
-
-        # Concatenate the training edges and the test edges
-        temp_edge_index = torch.cat([train_edge_index, test_edge_index], dim=1)
-
-        # Define test labels
-        # Train the model with the current test color
-        _, _, _, result_dct = train(n_colors, data=(temp_edge_index, color_indices,
-                                                    labels, test_colors), tested_color=test_color)
-        # Append the results to the results df
-        result_dct["test_color"] = test_color
-        results_df.loc[count] = result_dct
-        count += 1
-
-        # Save the results
-        results_df.to_csv(join("results_vae_first_model.csv"), index=False)
+    # Train the model with the current test color
+    _, _, _, result_dct = train(n_colors, data=(edge_index, color_indices,
+                                                labels, test_colors))
+    # Append the results to the results df
+    with open(f"{llm}_results.json", "w") as f:
+        json.dump(result_dct, f, indent=4)
 
 
 if __name__ == '__main__':
