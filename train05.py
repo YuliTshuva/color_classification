@@ -21,12 +21,12 @@ rcParams['font.family'] = "Times New Roman"
 EPOCHS = 10000
 LR = 0.001
 TOLERANCE = 30
-GAMMA = 100
 
 
-def train(n_colors, data):
+def train(n_colors, data, gamma):
     """
     Get the data and train the models for color classification.
+    :param gamma: The weight for the positive class in the BCEWithLogitsLoss, to handle class imbalance.
     :param data: edge_index (2, edges), color_indices (n_vertices,), labels (n_colors,)
     :param n_colors: Amount of colors in the dataset.
     :return: The trained models: GNN, MLP, Color Embedding, Attention Classifier.
@@ -61,7 +61,7 @@ def train(n_colors, data):
     color_labels = color_labels.float()
 
     # Set a loss for binary classification
-    classification_loss = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([GAMMA], device=DEVICE))
+    classification_loss = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([gamma], device=DEVICE))
 
     # Set an enumerator for the colors
     colors_enumerator = torch.arange(0, n_colors).long()
@@ -245,12 +245,13 @@ def main():
     test_nodes = split == 1
     test_colors = color_indices[test_nodes].unique()
 
-    # Train the model with the current test color
-    _, _, _, result_dct = train(n_colors, data=(edge_index, color_indices,
-                                                labels, test_colors))
-    # Append the results to the results df
-    with open(f"{llm}_results.json", "w") as f:
-        json.dump(result_dct, f, indent=4)
+    for gamma in [0.001, 0.05, 0.2, 1.0, 5.0, 10.0, 20, 50, 100, 1000]:
+        # Train the model with the current test color
+        _, _, _, result_dct = train(n_colors, data=(edge_index, color_indices,
+                                                    labels, test_colors), gamma=gamma)
+        # Append the results to the results df
+        with open(f"{llm}_results_for_gamma_{gamma}.json", "w") as f:
+            json.dump(result_dct, f, indent=4)
 
 
 if __name__ == '__main__':
