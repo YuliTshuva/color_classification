@@ -156,7 +156,7 @@ class RGCNLayer(nn.Module):
                 src = torch.cat([src, edge_index[1, mask]])
                 dst = torch.cat([dst, edge_index[0, mask]])
 
-            # Everything below is unchanged — single pass over the (now doubled) edge list
+            # Single pass over the (now doubled) edge list
             msg = x[src] @ self.weight[r]
 
             deg = torch.zeros(N, device=x.device)
@@ -164,7 +164,7 @@ class RGCNLayer(nn.Module):
             deg_inv = torch.where(deg > 0, 1.0 / deg.clamp(min=1), torch.zeros_like(deg))
 
             agg = torch.zeros(N, self.out_dim, device=x.device)
-            agg.scatter_add_(0, dst.unsqueeze(1).expand_as(msg), agg)
+            agg.scatter_add_(0, dst.unsqueeze(1).expand_as(msg), msg)
 
             out += agg * deg_inv.unsqueeze(1)
 
@@ -188,13 +188,14 @@ class RGCN(nn.Module):
             num_relations: int,
             num_layers: int = 2,
             dropout: float = 0.0,
+            directed: bool = False
     ):
         super().__init__()
         self.dropout = dropout
 
         dims = [in_dim] + [hidden_dim] * (num_layers - 1) + [out_dim]
         self.layers = nn.ModuleList([
-            RGCNLayer(dims[i], dims[i + 1], num_relations)
+            RGCNLayer(dims[i], dims[i + 1], num_relations, directed=directed)
             for i in range(num_layers)
         ])
 

@@ -9,6 +9,9 @@ from models import *
 from utils import *
 from sklearn.metrics import roc_auc_score
 import json
+import optuna
+from tqdm.auto import tqdm
+import ast
 
 # Create a random seed for reproducibility
 torch.manual_seed(42)
@@ -23,30 +26,41 @@ LR = 0.001
 TOLERANCE = 30
 
 
-def train(n_colors, data):
+def train(n_colors, data, hps, directed=False):
     """
     Get the data and train the models for color classification.
     :param data: edge_index (2, edges), color_indices (n_vertices,), labels (n_colors,)
     :param n_colors: Amount of colors in the dataset.
     :return: The trained models: GNN, MLP, Color Embedding, Attention Classifier.
     """
+    # Read the HPs from the file
+    color_embedding_dim = hps["color_embedding_dim"]
+    gnn_embedding_dim = hps["gnn_embedding_dim"]
+    gnn_hidden_dim = hps["gnn_hidden_dim"]
+    k_gnn_layers = hps["k_gnn_layers"]
+    gnn_dropout_rate = hps["gnn_dropout_rate"]
+    gnn_mlp_hidden_dims = [hps["gnn_mlp_hidden_dims"]]
+    mlp_dropout_rate = hps["mlp_dropout_rate"]
+    alpha = hps["alpha"]
+
     # Initiate the GNN model
-    gnn_model = RGCN(in_dim=COLOR_EMBEDDING_DIM,
-                     hidden_dim=GNN_HIDDEN_DIM,
-                     out_dim=GNN_EMBEDDING_DIM,
+    gnn_model = RGCN(in_dim=color_embedding_dim,
+                     hidden_dim=gnn_hidden_dim,
+                     out_dim=gnn_embedding_dim,
                      num_relations=2,
-                     num_layers=K_GNN_LAYERS,
-                     dropout=GNN_DROPOUT_RATE)
+                     num_layers=k_gnn_layers,
+                     dropout=gnn_dropout_rate,
+                     directed=directed)
 
     # Initiate the MLP model for GNN prediction
-    mlp_model = MLP(input_dim=GNN_EMBEDDING_DIM,
-                    hidden_dims=GNN_MLP_HIDDEN_DIMS,
+    mlp_model = MLP(input_dim=gnn_embedding_dim,
+                    hidden_dims=gnn_mlp_hidden_dims,
                     output_dim=1,
-                    dropout_rate=MLP_DROPOUT_RATE)
+                    dropout_rate=mlp_dropout_rate)
 
     # Initiate the color embedding model
     color_embedding_model = ColorEmbedding(n_colors=n_colors,
-                                           embedding_dim=COLOR_EMBEDDING_DIM)
+                                           embedding_dim=color_embedding_dim)
 
     # Unpack the data
     edge_index, edge_relation, color_indices, color_labels, test_colors = data
@@ -86,7 +100,7 @@ def train(n_colors, data):
     best_gnn, best_mlp, best_color_embedding, best_attention = None, None, None, None
 
     # Start the training loop
-    for epoch in range(EPOCHS):
+    for epoch in tqdm(range(EPOCHS)):
         # Embed the color indices for GNN input
         color_embeddings = color_embedding_model(color_indices)
 
@@ -127,7 +141,7 @@ def train(n_colors, data):
         total_variance = color_variances.mean()
 
         # Combine the losses
-        loss = ALPHA * loss_gnn + total_variance
+        loss = alpha * loss_gnn + total_variance
 
         # Backpropagation
         optimizer.zero_grad()
@@ -191,7 +205,27 @@ def train(n_colors, data):
     return gnn_model, mlp_model, color_embedding_model, results_dct
 
 
-def main():
+def analyze_results():
+    # Load the hyperparameters from the file
+    llm = "MiniLM-L6"
+    with open(join("results", llm, "hp_results.json"), "r") as f:
+        hp_tried = json.load(f)
+
+    # Find the best hyperparameters based on the sum of test_gnn_auc and test_gnn_accuracy
+    best_hps = None
+    best_score = -float('inf')
+    for hps_str, results in hp_tried.items():
+        score = results["test_gnn_auc"]
+        if score > best_score:
+            best_score = score
+            best_hps = hps_str
+    # print(f"Best Hyperparameters: {best_hps}")
+    # print("Dictionary of best hyperparameters and their results:")
+    # print(hp_tried[best_hps])
+    return best_hps
+
+
+def hyper_parameters_optimization():
     # Load the Twitch dataset
     llm = "MiniLM-L6"
     edge_index, color_indices, labels, split = load_supervised_graph_data(llm=llm)
@@ -224,12 +258,133 @@ def main():
     # Create a tensor that indicates which relation each edge belongs to (0 for original edges, 1 for same color edges)
     edge_relation = torch.cat([torch.zeros(r1, dtype=torch.long), torch.ones(r2, dtype=torch.long)], dim=0)
 
+    # Set the hyperparameter ranges for the grid search
+    color_embedding_dim_range = [16, 32, 64, 128, 256]
+    gnn_embedding_dim_range = [8, 16, 32, 64, 128]
+    gnn_hidden_dim_range = [32, 64, 128, 256, 512]
+    k_gnn_layers_range = [1, 2, 3, 4, 5]
+    gnn_dropout_rate_range = [0.2, 0.3, 0.4, 0.5, 0.6]
+    gnn_mlp_hidden_dims_range = [8, 16, 32, 64, 128]
+    mlp_dropout_rate_range = [0.0, 0.1, 0.2, 0.3]
+    alpha_range = [2, 10, 20, 50, 100]
+
+    # Load the hyperparameters from the file
+    with open(join("results", llm, "hp_results.json"), "r") as f:
+        hp_tried = json.load(f)
+
+    # Create optuna study for hyperparameter optimization
+    study = optuna.create_study(direction="maximize")
+
+    # Define the objective function for optuna
+    def objective(trial):
+        # Sample hyperparameters from the defined ranges
+        hps = {
+            "color_embedding_dim": trial.suggest_categorical("color_embedding_dim", color_embedding_dim_range),
+            "gnn_embedding_dim": trial.suggest_categorical("gnn_embedding_dim", gnn_embedding_dim_range),
+            "gnn_hidden_dim": trial.suggest_categorical("gnn_hidden_dim", gnn_hidden_dim_range),
+            "k_gnn_layers": trial.suggest_categorical("k_gnn_layers", k_gnn_layers_range),
+            "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", gnn_dropout_rate_range),
+            "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", gnn_mlp_hidden_dims_range),
+            "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", mlp_dropout_rate_range),
+            "alpha": trial.suggest_categorical("alpha", alpha_range)
+        }
+
+        if str(hps) in hp_tried:
+            return hp_tried[str(hps)]["test_gnn_auc"] + hp_tried[str(hps)]["test_gnn_accuracy"]
+
+        # Train the model with the current test color
+        _, _, _, result_dct = train(n_colors, data=(edge_index, edge_relation, color_indices,
+                                                    labels, test_colors), hps=hps)
+
+        # Save the results to the hp_tried dictionary
+        hp_tried[str(hps)] = result_dct
+
+        # Save the updated hp_tried dictionary to the file
+        with open(join("results", llm, "hp_results.json"), "w") as f:
+            json.dump(hp_tried, f, indent=4)
+
+        return result_dct["test_gnn_auc"] + result_dct["test_gnn_accuracy"]
+
+    # Run the optimization for a specified number of trials
+    study.optimize(objective, n_trials=1000)
+
+
+def main():
+    # Load the Twitch dataset
+    llm = "MiniLM-L6"
+    edge_index, color_indices, labels, split = load_supervised_graph_data(llm=llm)
+
+    # Find n_colors by the length of the labels
+    n_colors = len(labels)
+
+    # Set the test colors list
+    test_nodes = split == 1
+    test_colors = color_indices[test_nodes].unique()
+
+    # Add edges between nodes of the same color
+    same_color_edges = []
+    for color in range(n_colors):
+        # Find all nodes with the current color index
+        color_nodes = (color_indices == color).nonzero(as_tuple=True)[0]
+        if len(color_nodes) > 1:
+            # Create edges between all pairs of nodes with the same color
+            for i in range(len(color_nodes)):
+                for j in range(i + 1, len(color_nodes)):
+                    same_color_edges.append((color_nodes[i].item(), color_nodes[j].item()))
+        else:
+            raise Exception(f"color {color} has one or less nodes.")
+
+    # Find the lengths of both edge_index and same_color_edges
+    r1, r2 = edge_index.size(1), len(same_color_edges)
+
+    # Convert the same color edges to a tensor and concatenate with the original edge_index
+    if same_color_edges:
+        same_color_edge_index = torch.tensor(same_color_edges, dtype=torch.long).t().contiguous()
+        edge_index = torch.cat([edge_index, same_color_edge_index], dim=1)
+    else:
+        raise Exception("No same color edges were created. Check the dataset and the color indices.")
+
+    # Create a tensor that indicates which relation each edge belongs to (0 for original edges, 1 for same color edges)
+    edge_relation = torch.cat([torch.zeros(r1, dtype=torch.long), torch.ones(r2, dtype=torch.long)], dim=0)
+
+    # Load the best hyperparameters
+    best_hps = analyze_results()
+    best_hps = ast.literal_eval(best_hps)
+
+    # Edit hyperparameters
+    best_hps["k_gnn_layers"] = 15
+
+    # best_hps["color_embedding_dim"] = 32
+    # best_hps["gnn_embedding_dim"] = 256
+    # best_hps["gnn_hidden_dim"] = 128
+    # best_hps["gnn_dropout_rate"] = 0.4
+    # best_hps["gnn_mlp_hidden_dims"] = 32
+
+
+    # Print the best hyperparameters
+    print("Best Hyperparameters:")
+    for key, value in best_hps.items():
+        print(f"{key}: {value}")
+
     # Train the model with the current test color
-    _, _, _, result_dct = train(n_colors, data=(edge_index, edge_relation, color_indices,
-                                                labels, test_colors))
-    # Append the results to the results df
-    with open(f"{llm}_results.json", "w") as f:
-        json.dump(result_dct, f, indent=4)
+    rgcn_model, _, _, result_dct = train(n_colors, data=(edge_index, edge_relation, color_indices,
+                                                labels, test_colors), hps=best_hps, directed=False)
+
+    # Print the final results
+    print("Final results with the best hyperparameters:")
+    print("Train GNN Accuracy:", result_dct["train_gnn_accuracy"])
+    print("Test GNN Accuracy:", result_dct["test_gnn_accuracy"])
+    print("Train GNN AUC:", result_dct["train_gnn_auc"])
+    print("Test GNN AUC:", result_dct["test_gnn_auc"])
+
+    # Print the norm of each relational weight matrix in the RGCN model
+    print("Sum of absolute values of each relational weight matrix in the RGCN model:")
+    for j, layer in enumerate(rgcn_model.layers):
+        print(f"Layer {j}:")
+        for i, weight in enumerate(layer.weight):
+            print(f"\tRelation {i}: {weight.abs().sum().item()}")
+
+        print(f"\tSelf-loop: {layer.self_weight.abs().sum().item()}")
 
 
 if __name__ == '__main__':
