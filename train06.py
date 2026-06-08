@@ -24,6 +24,10 @@ rcParams['font.family'] = "Times New Roman"
 EPOCHS = 10000
 LR = 0.001
 TOLERANCE = 30
+DISEASES = ['acute_and_unspecified_renal_failure', 'cardiac_dysrhythmias', 'congestive_heart_failure_nonhypertensive',
+            'coronary_atherosclerosis_and_other_heart_disease', 'disorders_of_lipid_metabolism',
+            'essential_hypertension', 'fluid_and_electrolyte_disorders',
+            'hypertension_with_complications_and_secondary_hypertension']
 
 
 def train(n_colors, data, hps, directed=False):
@@ -211,21 +215,18 @@ def train(n_colors, data, hps, directed=False):
 
 def analyze_results():
     # Load the hyperparameters from the file
-    llm = "MiniLM-L6"
-    with open(join("results", llm, "hp_results.json"), "r") as f:
+    with open(join("results", "hp_results.json"), "r") as f:
         hp_tried = json.load(f)
 
     # Find the best hyperparameters based on the sum of test_gnn_auc and test_gnn_accuracy
     best_hps = None
     best_score = -float('inf')
-    for hps_str, results in hp_tried.items():
-        score = results["test_gnn_auc"]
+    for hps_str, score in hp_tried.items():
         if score > best_score:
             best_score = score
             best_hps = hps_str
-    # print(f"Best Hyperparameters: {best_hps}")
-    # print("Dictionary of best hyperparameters and their results:")
-    # print(hp_tried[best_hps])
+    print(f"Best Hyperparameters: {best_hps}")
+    print("Best average AUC:", best_score)
     return best_hps
 
 
@@ -239,7 +240,7 @@ def hyper_parameters_optimization():
     gnn_mlp_hidden_dims_range = [4, 8, 16, 32]
     mlp_dropout_rate_range = [0.0, 0.1, 0.3]
     alpha_range = [2, 10, 50, 200, 1000]
-    k_range = [3, 10, 20]
+    k_range = [3, 5, 10, 20, 50]
     model_options = ["RGCN", "RGAT"]
 
     # Load the hyperparameters from the file
@@ -252,6 +253,13 @@ def hyper_parameters_optimization():
 
     # Create optuna study for hyperparameter optimization
     study = optuna.create_study(direction="maximize")
+
+    # Load datasets in advance
+    datasets = {}
+    for disease in DISEASES:
+        datasets[disease] = {}
+        for k in k_range:
+            datasets[disease][k] = load_disease_data(disease=disease, k=k)
 
     # Define the objective function for optuna
     def objective(trial):
@@ -269,17 +277,12 @@ def hyper_parameters_optimization():
             "model": trial.suggest_categorical("model", model_options)
         }
 
-        # Set Hyperparameters
-        k = hps["k"]
-
-        # Define the list of LLMs to test
-        llms = []
-        # Store the results for each LLM
+        # Store the results for each disease
         total_auc = 0
 
-        for llm in llms:
+        for disease in DISEASES:
             # Load the dataset
-            edge_index, color_indices, labels, split = load_supervised_graph_data(llm=llm, k=k)
+            edge_index, color_indices, labels, split = datasets[disease][hps["k"]]
 
             # Find n_colors by the length of the labels
             n_colors = len(labels)
@@ -322,8 +325,8 @@ def hyper_parameters_optimization():
                                                  labels, test_colors), hps=hps)
             total_auc += test_gnn_auc
 
-        # Normalize the total AUC by the number of LLMs tested
-        total_auc /= len(llms)
+        # Normalize the total AUC by the number of diseases tested
+        total_auc /= len(DISEASES)
 
         # Save the results to the hp_tried dictionary
         hp_tried[str(hps)] = total_auc
