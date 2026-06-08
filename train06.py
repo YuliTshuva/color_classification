@@ -11,7 +11,7 @@ from sklearn.metrics import roc_auc_score
 import json
 import optuna
 from tqdm.auto import tqdm
-import ast
+import os
 
 # Create a random seed for reproducibility
 torch.manual_seed(42)
@@ -42,15 +42,27 @@ def train(n_colors, data, hps, directed=False):
     gnn_mlp_hidden_dims = [hps["gnn_mlp_hidden_dims"]]
     mlp_dropout_rate = hps["mlp_dropout_rate"]
     alpha = hps["alpha"]
+    model = hps["model"]
 
     # Initiate the GNN model
-    gnn_model = RGCN(in_dim=color_embedding_dim,
-                     hidden_dim=gnn_hidden_dim,
-                     out_dim=gnn_embedding_dim,
-                     num_relations=2,
-                     num_layers=k_gnn_layers,
-                     dropout=gnn_dropout_rate,
-                     directed=directed)
+    if model == "RGCN":
+        gnn_model = RGCN(in_dim=color_embedding_dim,
+                         hidden_dim=gnn_hidden_dim,
+                         out_dim=gnn_embedding_dim,
+                         num_relations=2,
+                         num_layers=k_gnn_layers,
+                         dropout=gnn_dropout_rate,
+                         directed=directed)
+    elif model == "RGAT":
+        gnn_model = RGAT(in_dim=color_embedding_dim,
+                         hidden_dim=gnn_hidden_dim,
+                         out_dim=gnn_embedding_dim,
+                         num_relations=2,
+                         num_layers=k_gnn_layers,
+                         dropout=gnn_dropout_rate,
+                         directed=directed)
+    else:
+        raise ValueError(f"Invalid model type: {model}. Choose 'RGCN' or 'RGAT'.")
 
     # Initiate the MLP model for GNN prediction
     mlp_model = MLP(input_dim=gnn_embedding_dim,
@@ -141,7 +153,7 @@ def train(n_colors, data, hps, directed=False):
         total_variance = color_variances.mean()
 
         # Combine the losses
-        loss = alpha * loss_gnn + total_variance
+        loss = alpha * loss_gnn + total_variance  # Maximize over the variance of the colors
 
         # Backpropagation
         optimizer.zero_grad()
@@ -183,26 +195,18 @@ def train(n_colors, data, hps, directed=False):
 
     # Calculate the predictions and scores
     gnn_scores = torch.sigmoid(mlp_output).squeeze()
-    gnn_predictions = (gnn_scores > 0.5).long()
+    # gnn_predictions = (gnn_scores > 0.5).long()
 
     # Calculate the accuracies for the attention model and the gnn
     node_labels = node_labels.long()
-    train_gnn_accuracy = (gnn_predictions[training_mask] == node_labels[training_mask]).float().mean().item()
-    test_gnn_accuracy = (gnn_predictions[~training_mask] == node_labels[~training_mask]).float().mean().item()
+    # train_gnn_accuracy = (gnn_predictions[training_mask] == node_labels[training_mask]).float().mean().item()
+    # test_gnn_accuracy = (gnn_predictions[~training_mask] == node_labels[~training_mask]).float().mean().item()
 
     # Calculate AUC-ROC for the attention model and the gnn over the training set
-    train_gnn_auc = roc_auc_score(node_labels[training_mask].cpu().numpy(), gnn_scores[training_mask].cpu().numpy())
+    # train_gnn_auc = roc_auc_score(node_labels[training_mask].cpu().numpy(), gnn_scores[training_mask].cpu().numpy())
     test_gnn_auc = roc_auc_score(node_labels[~training_mask].cpu().numpy(), gnn_scores[~training_mask].cpu().numpy())
 
-    # Set a dictionary for the results dict
-    results_dct = {
-        "train_gnn_accuracy": train_gnn_accuracy,
-        "test_gnn_accuracy": test_gnn_accuracy,
-        "train_gnn_auc": train_gnn_auc,
-        "test_gnn_auc": test_gnn_auc,
-    }
-
-    return gnn_model, mlp_model, color_embedding_model, results_dct
+    return test_gnn_auc
 
 
 def analyze_results():
@@ -226,50 +230,24 @@ def analyze_results():
 
 
 def hyper_parameters_optimization():
-    # Load the Twitch dataset
-    llm = "MiniLM-L6"
-    edge_index, color_indices, labels, split = load_supervised_graph_data(llm=llm)
-
-    # Find n_colors by the length of the labels
-    n_colors = len(labels)
-
-    # Set the test colors list
-    test_nodes = split == 1
-    test_colors = color_indices[test_nodes].unique()
-
-    # Add edges between nodes of the same color
-    same_color_edges = []
-    for color in range(n_colors):
-        color_nodes = (color_indices == color).nonzero(as_tuple=True)[0]
-        if len(color_nodes) > 1:
-            # Create edges between all pairs of nodes with the same color
-            for i in range(len(color_nodes)):
-                for j in range(i + 1, len(color_nodes)):
-                    same_color_edges.append((color_nodes[i].item(), color_nodes[j].item()))
-
-    # Find the lengths of both edge_index and same_color_edges
-    r1, r2 = edge_index.size(1), len(same_color_edges)
-
-    # Convert the same color edges to a tensor and concatenate with the original edge_index
-    if same_color_edges:
-        same_color_edge_index = torch.tensor(same_color_edges, dtype=torch.long).t().contiguous()
-        edge_index = torch.cat([edge_index, same_color_edge_index], dim=1)
-
-    # Create a tensor that indicates which relation each edge belongs to (0 for original edges, 1 for same color edges)
-    edge_relation = torch.cat([torch.zeros(r1, dtype=torch.long), torch.ones(r2, dtype=torch.long)], dim=0)
-
     # Set the hyperparameter ranges for the grid search
-    color_embedding_dim_range = [16, 32, 64, 128, 256]
-    gnn_embedding_dim_range = [8, 16, 32, 64, 128]
-    gnn_hidden_dim_range = [32, 64, 128, 256, 512]
-    k_gnn_layers_range = [1, 2, 3, 4, 5]
-    gnn_dropout_rate_range = [0.2, 0.3, 0.4, 0.5, 0.6]
-    gnn_mlp_hidden_dims_range = [8, 16, 32, 64, 128]
-    mlp_dropout_rate_range = [0.0, 0.1, 0.2, 0.3]
-    alpha_range = [2, 10, 20, 50, 100]
+    color_embedding_dim_range = [8, 16, 32, 64, 128]
+    gnn_embedding_dim_range = [16, 32, 64, 128, 256]
+    gnn_hidden_dim_range = [8, 16, 32, 64, 128]
+    k_gnn_layers_range = [3, 5, 10, 15, 20]
+    gnn_dropout_rate_range = [0.2, 0.3, 0.5, 0.7]
+    gnn_mlp_hidden_dims_range = [4, 8, 16, 32]
+    mlp_dropout_rate_range = [0.0, 0.1, 0.3]
+    alpha_range = [2, 10, 50, 200, 1000]
+    k_range = [3, 10, 20]
+    model_options = ["RGCN", "RGAT"]
 
     # Load the hyperparameters from the file
-    with open(join("results", llm, "hp_results.json"), "r") as f:
+    hp_path = join("results", "hp_results.json")
+    if not os.path.exists(hp_path):
+        with open(hp_path, "w") as f:
+            json.dump({}, f, indent=4)
+    with open(hp_path, "r") as f:
         hp_tried = json.load(f)
 
     # Create optuna study for hyperparameter optimization
@@ -286,105 +264,82 @@ def hyper_parameters_optimization():
             "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", gnn_dropout_rate_range),
             "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", gnn_mlp_hidden_dims_range),
             "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", mlp_dropout_rate_range),
-            "alpha": trial.suggest_categorical("alpha", alpha_range)
+            "alpha": trial.suggest_categorical("alpha", alpha_range),
+            "k": trial.suggest_categorical("k", k_range),
+            "model": trial.suggest_categorical("model", model_options)
         }
 
-        if str(hps) in hp_tried:
-            return hp_tried[str(hps)]["test_gnn_auc"] + hp_tried[str(hps)]["test_gnn_accuracy"]
+        # Set Hyperparameters
+        k = hps["k"]
 
-        # Train the model with the current test color
-        _, _, _, result_dct = train(n_colors, data=(edge_index, edge_relation, color_indices,
-                                                    labels, test_colors), hps=hps)
+        # Define the list of LLMs to test
+        llms = []
+        # Store the results for each LLM
+        total_auc = 0
+
+        for llm in llms:
+            # Load the dataset
+            edge_index, color_indices, labels, split = load_supervised_graph_data(llm=llm, k=k)
+
+            # Find n_colors by the length of the labels
+            n_colors = len(labels)
+
+            # Set the test colors list
+            test_nodes = split == 1
+            test_colors = color_indices[test_nodes].unique()
+
+            # Add edges between nodes of the same color
+            same_color_edges = []
+            for color in range(n_colors):
+                # Find all nodes with the current color index
+                color_nodes = (color_indices == color).nonzero(as_tuple=True)[0]
+                if len(color_nodes) > 1:
+                    # Create edges between all pairs of nodes with the same color
+                    for i in range(len(color_nodes)):
+                        for j in range(i + 1, len(color_nodes)):
+                            same_color_edges.append((color_nodes[i].item(), color_nodes[j].item()))
+                else:
+                    raise Exception(f"color {color} has one or less nodes.")
+
+            # Find the lengths of both edge_index and same_color_edges
+            r1, r2 = edge_index.size(1), len(same_color_edges)
+
+            # Convert the same color edges to a tensor and concatenate with the original edge_index
+            if same_color_edges:
+                same_color_edge_index = torch.tensor(same_color_edges, dtype=torch.long).t().contiguous()
+                edge_index = torch.cat([edge_index, same_color_edge_index], dim=1)
+            else:
+                raise Exception("No same color edges were created. Check the dataset and the color indices.")
+
+            # Create a tensor that indicates which relation each edge belongs to (0 for original edges, 1 for same color edges)
+            edge_relation = torch.cat([torch.zeros(r1, dtype=torch.long), torch.ones(r2, dtype=torch.long)], dim=0)
+
+            if str(hps) in hp_tried:
+                return hp_tried[str(hps)]
+
+            # Train the model with the current test color
+            test_gnn_auc = train(n_colors, data=(edge_index, edge_relation, color_indices,
+                                                 labels, test_colors), hps=hps)
+            total_auc += test_gnn_auc
+
+        # Normalize the total AUC by the number of LLMs tested
+        total_auc /= len(llms)
 
         # Save the results to the hp_tried dictionary
-        hp_tried[str(hps)] = result_dct
+        hp_tried[str(hps)] = total_auc
 
         # Save the updated hp_tried dictionary to the file
-        with open(join("results", llm, "hp_results.json"), "w") as f:
+        with open(join("results", "hp_results.json"), "w") as f:
             json.dump(hp_tried, f, indent=4)
 
-        return result_dct["test_gnn_auc"] + result_dct["test_gnn_accuracy"]
+        return total_auc
 
     # Run the optimization for a specified number of trials
     study.optimize(objective, n_trials=1000)
 
 
 def main():
-    # Load the Twitch dataset
-    llm = "MiniLM-L6"
-    edge_index, color_indices, labels, split = load_supervised_graph_data(llm=llm)
-
-    # Find n_colors by the length of the labels
-    n_colors = len(labels)
-
-    # Set the test colors list
-    test_nodes = split == 1
-    test_colors = color_indices[test_nodes].unique()
-
-    # Add edges between nodes of the same color
-    same_color_edges = []
-    for color in range(n_colors):
-        # Find all nodes with the current color index
-        color_nodes = (color_indices == color).nonzero(as_tuple=True)[0]
-        if len(color_nodes) > 1:
-            # Create edges between all pairs of nodes with the same color
-            for i in range(len(color_nodes)):
-                for j in range(i + 1, len(color_nodes)):
-                    same_color_edges.append((color_nodes[i].item(), color_nodes[j].item()))
-        else:
-            raise Exception(f"color {color} has one or less nodes.")
-
-    # Find the lengths of both edge_index and same_color_edges
-    r1, r2 = edge_index.size(1), len(same_color_edges)
-
-    # Convert the same color edges to a tensor and concatenate with the original edge_index
-    if same_color_edges:
-        same_color_edge_index = torch.tensor(same_color_edges, dtype=torch.long).t().contiguous()
-        edge_index = torch.cat([edge_index, same_color_edge_index], dim=1)
-    else:
-        raise Exception("No same color edges were created. Check the dataset and the color indices.")
-
-    # Create a tensor that indicates which relation each edge belongs to (0 for original edges, 1 for same color edges)
-    edge_relation = torch.cat([torch.zeros(r1, dtype=torch.long), torch.ones(r2, dtype=torch.long)], dim=0)
-
-    # Load the best hyperparameters
-    best_hps = analyze_results()
-    best_hps = ast.literal_eval(best_hps)
-
-    # Edit hyperparameters
-    best_hps["k_gnn_layers"] = 15
-
-    # best_hps["color_embedding_dim"] = 32
-    # best_hps["gnn_embedding_dim"] = 256
-    # best_hps["gnn_hidden_dim"] = 128
-    # best_hps["gnn_dropout_rate"] = 0.4
-    # best_hps["gnn_mlp_hidden_dims"] = 32
-
-
-    # Print the best hyperparameters
-    print("Best Hyperparameters:")
-    for key, value in best_hps.items():
-        print(f"{key}: {value}")
-
-    # Train the model with the current test color
-    rgcn_model, _, _, result_dct = train(n_colors, data=(edge_index, edge_relation, color_indices,
-                                                labels, test_colors), hps=best_hps, directed=False)
-
-    # Print the final results
-    print("Final results with the best hyperparameters:")
-    print("Train GNN Accuracy:", result_dct["train_gnn_accuracy"])
-    print("Test GNN Accuracy:", result_dct["test_gnn_accuracy"])
-    print("Train GNN AUC:", result_dct["train_gnn_auc"])
-    print("Test GNN AUC:", result_dct["test_gnn_auc"])
-
-    # Print the norm of each relational weight matrix in the RGCN model
-    print("Sum of absolute values of each relational weight matrix in the RGCN model:")
-    for j, layer in enumerate(rgcn_model.layers):
-        print(f"Layer {j}:")
-        for i, weight in enumerate(layer.weight):
-            print(f"\tRelation {i}: {weight.abs().sum().item()}")
-
-        print(f"\tSelf-loop: {layer.self_weight.abs().sum().item()}")
+    hyper_parameters_optimization()
 
 
 if __name__ == '__main__':

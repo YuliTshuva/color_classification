@@ -127,8 +127,8 @@ class RGCNLayer(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        # Glorot uniform initialization
-        nn.init.xavier_uniform_(self.weight.view(-1, self.out_dim))
+        for r in range(self.num_relations):
+            nn.init.xavier_uniform_(self.weight[r])
         if self.self_weight is not None:
             nn.init.xavier_uniform_(self.self_weight)
 
@@ -161,7 +161,7 @@ class RGCNLayer(nn.Module):
 
             deg = torch.zeros(N, device=x.device)
             deg.scatter_add_(0, dst, torch.ones(src.shape[0], device=x.device))
-            deg_inv = torch.where(deg > 0, 1.0 / deg.clamp(min=1), torch.zeros_like(deg))
+            deg_inv = torch.where(deg > 0, 1.0 / deg, torch.zeros_like(deg))
 
             agg = torch.zeros(N, self.out_dim, device=x.device)
             agg.scatter_add_(0, dst.unsqueeze(1).expand_as(msg), msg)
@@ -206,3 +206,176 @@ class RGCN(nn.Module):
                 x = F.relu(x)
                 x = F.dropout(x, p=self.dropout, training=self.training)
         return x  # return logits; apply softmax/sigmoid outside
+
+
+class RGATLayer(nn.Module):
+    """
+    Relational Graph Attention Layer.
+
+    For each relation type r, computes a learned attention coefficient
+    alpha_{ij}^r between each source-target pair, then uses those
+    coefficients (instead of uniform degree-normalization) to aggregate
+    neighbor features. A separate self-loop transform is added, and all
+    contributions are summed before activation.
+
+    Attention score for edge (i -> j) under relation r:
+        e_{ij}^r = LeakyReLU( a_r^T [W_r h_i || W_r h_j] )
+        alpha_{ij}^r = softmax over all neighbors of j under r
+    """
+
+    def __init__(
+            self,
+            in_dim: int,
+            out_dim: int,
+            num_relations: int,
+            num_heads: int = 1,
+            dropout: float = 0.0,
+            negative_slope: float = 0.2,
+            self_loop: bool = True,
+            directed: bool = False,
+    ):
+        super().__init__()
+        assert out_dim % num_heads == 0, "out_dim must be divisible by num_heads"
+
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.num_relations = num_relations
+        self.num_heads = num_heads
+        self.head_dim = out_dim // num_heads
+        self.dropout = dropout
+        self.negative_slope = negative_slope
+        self.self_loop = self_loop
+        self.directed = directed
+
+        # Per-relation weight matrices: (num_relations, in_dim, out_dim)
+        self.weight = nn.Parameter(torch.empty(num_relations, in_dim, out_dim))
+
+        # Per-relation attention vectors: (num_relations, num_heads, 2 * head_dim)
+        # The factor of 2 is for the concatenation [W h_i || W h_j]
+        self.attn = nn.Parameter(torch.empty(num_relations, num_heads, 2 * self.head_dim))
+
+        if self_loop:
+            self.self_weight = nn.Parameter(torch.empty(in_dim, out_dim))
+        else:
+            self.register_parameter("self_weight", None)
+
+        self.leaky_relu = nn.LeakyReLU(negative_slope)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for r in range(self.num_relations):
+            nn.init.xavier_uniform_(self.weight[r])
+        nn.init.xavier_uniform_(self.attn.view(self.num_relations, -1).unsqueeze(0))
+        if self.self_weight is not None:
+            nn.init.xavier_uniform_(self.self_weight)
+
+    def forward(
+            self,
+            x: torch.Tensor,  # [N, in_dim]
+            edge_index: torch.Tensor,  # [2, E]
+            edge_type: torch.Tensor,  # [E]
+    ) -> torch.Tensor:
+        N = x.size(0)
+        out = torch.zeros(N, self.out_dim, device=x.device)
+
+        for r in range(self.num_relations):
+            mask = edge_type == r
+            if not mask.any():
+                continue
+
+            src = edge_index[0, mask]
+            dst = edge_index[1, mask]
+
+            if not self.directed:
+                src = torch.cat([src, edge_index[1, mask]])
+                dst = torch.cat([dst, edge_index[0, mask]])
+
+            E_r = src.size(0)
+
+            # Linear transform: [E_r, out_dim] -> [E_r, num_heads, head_dim]
+            h_src = (x[src] @ self.weight[r]).view(E_r, self.num_heads, self.head_dim)
+            h_dst = (x[dst] @ self.weight[r]).view(E_r, self.num_heads, self.head_dim)
+
+            # Attention logits: concat source and target projections, dot with a_r
+            # attn[r]: [num_heads, 2*head_dim]
+            # cat([h_src, h_dst], dim=-1): [E_r, num_heads, 2*head_dim]
+            e = (torch.cat([h_src, h_dst], dim=-1) * self.attn[r]).sum(dim=-1)
+            # e: [E_r, num_heads]
+            e = self.leaky_relu(e)
+
+            # Softmax over neighbors of each dst node, per head
+            # We use scatter to compute the softmax denominator
+            e_max = torch.zeros(N, self.num_heads, device=x.device)
+            e_max.scatter_reduce_(0, dst.unsqueeze(1).expand_as(e), e, reduce="amax", include_self=True)
+            e_exp = torch.exp(e - e_max[dst])
+
+            denom = torch.zeros(N, self.num_heads, device=x.device)
+            denom.scatter_add_(0, dst.unsqueeze(1).expand_as(e_exp), e_exp)
+            denom = denom.clamp(min=1e-9)
+
+            alpha = e_exp / denom[dst]  # [E_r, num_heads]
+
+            # Optional attention dropout
+            alpha = F.dropout(alpha, p=self.dropout, training=self.training)
+
+            # Weighted aggregation: alpha * h_src, then sum at dst
+            # [E_r, num_heads, head_dim]
+            weighted = alpha.unsqueeze(-1) * h_src
+
+            agg = torch.zeros(N, self.num_heads, self.head_dim, device=x.device)
+            agg.scatter_add_(
+                0,
+                dst.view(-1, 1, 1).expand_as(weighted),
+                weighted,
+            )
+
+            # Flatten heads back to out_dim and accumulate
+            out += agg.view(N, self.out_dim)
+
+        if self.self_loop:
+            out += x @ self.self_weight
+
+        return out
+
+
+class RGAT(nn.Module):
+    """
+    Multi-layer RGAT for node classification.
+    """
+
+    def __init__(
+            self,
+            in_dim: int,
+            hidden_dim: int,
+            out_dim: int,
+            num_relations: int,
+            num_layers: int = 2,
+            num_heads: int = 4,
+            dropout: float = 0.0,
+            attn_dropout: float = 0.0,
+            negative_slope: float = 0.2,
+            directed: bool = False,
+    ):
+        super().__init__()
+        self.dropout = dropout
+
+        dims = [in_dim] + [hidden_dim] * (num_layers - 1) + [out_dim]
+        self.layers = nn.ModuleList([
+            RGATLayer(
+                dims[i], dims[i + 1],
+                num_relations=num_relations,
+                num_heads=num_heads if i < num_layers - 1 else 1,
+                dropout=attn_dropout,
+                negative_slope=negative_slope,
+                directed=directed,
+            )
+            for i in range(num_layers)
+        ])
+
+    def forward(self, x, edge_index, edge_type):
+        for i, layer in enumerate(self.layers):
+            x = layer(x, edge_index, edge_type)
+            if i < len(self.layers) - 1:
+                x = F.elu(x)
+                x = F.dropout(x, p=self.dropout, training=self.training)
+        return x  # logits; apply softmax/sigmoid outside
