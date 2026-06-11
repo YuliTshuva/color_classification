@@ -100,16 +100,15 @@ def load_vae_extracted_data():
     return edge_index, color_indices, labels
 
 
-def load_supervised_graph_data(llm, k):
+def load_minilm(k=10):
     """
-    llm: MiniLM-L6 | bert
     edge_index: (2, num_edges)
     color_indices: (num_vertices,)
     labels: (num_colors,)
     :return:
     """
     # Set the base dir
-    base_dir = join("data", f"{llm}_graph_k_{k}")
+    base_dir = join("data", "MiniLM", f"k_{k}")
     # Load the edges
     with open(join(base_dir, "edges.txt"), "r") as f:
         edges_text = f.read()
@@ -154,7 +153,7 @@ def load_supervised_graph_data(llm, k):
     return edge_index, color_indices, labels, split
 
 
-def load_disease_data(disease, k):
+def load_disease_data(disease, k=10):
     """
     llm: MiniLM-L6 | bert
     edge_index: (2, num_edges)

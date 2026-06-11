@@ -207,10 +207,10 @@ def train(n_colors, data, hps, directed=False):
     # test_gnn_accuracy = (gnn_predictions[~training_mask] == node_labels[~training_mask]).float().mean().item()
 
     # Calculate AUC-ROC for the attention model and the gnn over the training set
-    # train_gnn_auc = roc_auc_score(node_labels[training_mask].cpu().numpy(), gnn_scores[training_mask].cpu().numpy())
+    train_gnn_auc = roc_auc_score(node_labels[training_mask].cpu().numpy(), gnn_scores[training_mask].cpu().numpy())
     test_gnn_auc = roc_auc_score(node_labels[~training_mask].cpu().numpy(), gnn_scores[~training_mask].cpu().numpy())
 
-    return test_gnn_auc
+    return test_gnn_auc, train_gnn_auc
 
 
 def analyze_results():
@@ -232,14 +232,14 @@ def analyze_results():
 
 def hyper_parameters_optimization():
     # Set the hyperparameter ranges for the grid search
-    color_embedding_dim_range = [8, 16, 32, 64, 128]
-    gnn_embedding_dim_range = [16, 32, 64, 128, 256]
-    gnn_hidden_dim_range = [8, 16, 32, 64, 128]
-    k_gnn_layers_range = [3, 5, 10, 15, 20]
-    gnn_dropout_rate_range = [0.2, 0.3, 0.5, 0.7]
+    color_embedding_dim_range = [3, 5, 8, 16]
+    gnn_embedding_dim_range = [16, 32, 64]
+    gnn_hidden_dim_range = [16, 32, 64]
+    k_gnn_layers_range = [3, 8, 15, 25]
+    gnn_dropout_rate_range = [0.1, 0.3, 0.5, 0.7]
     gnn_mlp_hidden_dims_range = [4, 8, 16, 32]
-    mlp_dropout_rate_range = [0.0, 0.1, 0.3]
-    alpha_range = [2, 10, 50, 200, 1000]
+    mlp_dropout_rate_range = [0.0, 0.1, 0.2]
+    alpha_range = [1000]
     k_range = [3, 5, 10, 20, 50]
     model_options = ["RGCN", "RGAT"]
 
@@ -259,30 +259,8 @@ def hyper_parameters_optimization():
     for disease in DISEASES:
         datasets[disease] = {}
         for k in k_range:
-            datasets[disease][k] = load_disease_data(disease=disease, k=k)
-
-    # Define the objective function for optuna
-    def objective(trial):
-        # Sample hyperparameters from the defined ranges
-        hps = {
-            "color_embedding_dim": trial.suggest_categorical("color_embedding_dim", color_embedding_dim_range),
-            "gnn_embedding_dim": trial.suggest_categorical("gnn_embedding_dim", gnn_embedding_dim_range),
-            "gnn_hidden_dim": trial.suggest_categorical("gnn_hidden_dim", gnn_hidden_dim_range),
-            "k_gnn_layers": trial.suggest_categorical("k_gnn_layers", k_gnn_layers_range),
-            "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", gnn_dropout_rate_range),
-            "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", gnn_mlp_hidden_dims_range),
-            "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", mlp_dropout_rate_range),
-            "alpha": trial.suggest_categorical("alpha", alpha_range),
-            "k": trial.suggest_categorical("k", k_range),
-            "model": trial.suggest_categorical("model", model_options)
-        }
-
-        # Store the results for each disease
-        total_auc = 0
-
-        for disease in DISEASES:
-            # Load the dataset
-            edge_index, color_indices, labels, split = datasets[disease][hps["k"]]
+            # Load the raw data
+            edge_index, color_indices, labels, split = load_disease_data(disease=disease, k=k)
 
             # Find n_colors by the length of the labels
             n_colors = len(labels)
@@ -317,19 +295,54 @@ def hyper_parameters_optimization():
             # Create a tensor that indicates which relation each edge belongs to (0 for original edges, 1 for same color edges)
             edge_relation = torch.cat([torch.zeros(r1, dtype=torch.long), torch.ones(r2, dtype=torch.long)], dim=0)
 
+            # Save to the dictionary
+            datasets[disease][k] = edge_index, edge_relation, color_indices, labels, test_colors, n_colors
+
+    # Define the objective function for optuna
+    def objective(trial):
+        # Sample hyperparameters from the defined ranges
+        hps = {
+            "color_embedding_dim": trial.suggest_categorical("color_embedding_dim", color_embedding_dim_range),
+            "gnn_embedding_dim": trial.suggest_categorical("gnn_embedding_dim", gnn_embedding_dim_range),
+            "gnn_hidden_dim": trial.suggest_categorical("gnn_hidden_dim", gnn_hidden_dim_range),
+            "k_gnn_layers": trial.suggest_categorical("k_gnn_layers", k_gnn_layers_range),
+            "gnn_dropout_rate": trial.suggest_categorical("gnn_dropout_rate", gnn_dropout_rate_range),
+            "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", gnn_mlp_hidden_dims_range),
+            "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", mlp_dropout_rate_range),
+            "alpha": trial.suggest_categorical("alpha", alpha_range),
+            "k": trial.suggest_categorical("k", k_range),
+            "model": trial.suggest_categorical("model", model_options)
+        }
+
+        # Store the results for each disease
+        total_auc = 0
+
+        print(f"Trail: {trial.number}")
+
+        for disease in DISEASES:
+            # Load the dataset
+            edge_index, edge_relation, color_indices, labels, test_colors, n_colors = datasets[disease][hps["k"]]
+
             if str(hps) in hp_tried:
                 return hp_tried[str(hps)]
 
             # Train the model with the current test color
-            test_gnn_auc = train(n_colors, data=(edge_index, edge_relation, color_indices,
+            test_gnn_auc, train_gnn_auc = train(n_colors, data=(edge_index, edge_relation, color_indices,
                                                  labels, test_colors), hps=hps)
             total_auc += test_gnn_auc
+
+            # Print
+            print(f"\tDisease: {disease}\tTest GNN AUC: {test_gnn_auc:.4f}")
 
         # Normalize the total AUC by the number of diseases tested
         total_auc /= len(DISEASES)
 
         # Save the results to the hp_tried dictionary
         hp_tried[str(hps)] = total_auc
+
+        print("\nMean AUC:", total_auc)
+
+        print("*"*80, "\n")
 
         # Save the updated hp_tried dictionary to the file
         with open(join("results", "hp_results.json"), "w") as f:
