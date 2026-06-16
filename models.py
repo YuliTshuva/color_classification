@@ -11,11 +11,11 @@ MLP(input_dim=GNN_EMBEDDING_DIM, hidden_dims=MLP_HIDDEN_DIMS, output_dim=n_color
 # Imports
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, GATConv, SAGEConv, GINConv
 from constants import *
 
 
-class GNN(torch.nn.Module):
+class GCN(torch.nn.Module):
     def __init__(self, in_features, hidden_dim, out_features, K, dropout_rate: float):
         super().__init__()
         self.dropout_rate = dropout_rate
@@ -34,6 +34,121 @@ class GNN(torch.nn.Module):
 
     def forward(self, x, edge_index):
         # Hidden layers
+        for i, conv in enumerate(self.conv_layers):
+            x = conv(x, edge_index)
+            if i < len(self.conv_layers) - 1:
+                x = F.relu(x)
+                x = F.dropout(x, p=self.dropout_rate, training=self.training)
+
+        return x
+
+
+class GAT(torch.nn.Module):
+    """
+    Graph Attention Network built on PyG's GATConv.
+
+    Intermediate layers use multi-head attention with concatenation (so their
+    output dim is hidden_dim * heads). The final layer uses a single head with
+    averaging (concat=False) to produce out_features logits.
+    """
+
+    def __init__(self, in_features, hidden_dim, out_features, K, dropout_rate: float, heads: int = 1):
+        super().__init__()
+        self.dropout_rate = dropout_rate
+        self.k = K
+        self.heads = heads
+
+        if K >= 3:
+            self.conv_layers = nn.ModuleList(
+                [GATConv(in_features, hidden_dim, heads=heads, concat=True, dropout=dropout_rate)] +
+                [GATConv(hidden_dim * heads, hidden_dim, heads=heads, concat=True, dropout=dropout_rate)
+                 for _ in range(K - 2)] +
+                [GATConv(hidden_dim * heads, out_features, heads=1, concat=False, dropout=dropout_rate)])
+        elif K == 2:
+            self.conv_layers = nn.ModuleList(
+                [GATConv(in_features, hidden_dim, heads=heads, concat=True, dropout=dropout_rate),
+                 GATConv(hidden_dim * heads, out_features, heads=1, concat=False, dropout=dropout_rate)])
+        elif K == 1:
+            self.conv_layers = nn.ModuleList(
+                [GATConv(in_features, out_features, heads=1, concat=False, dropout=dropout_rate)])
+        else:
+            raise NotImplementedError
+
+    def forward(self, x, edge_index):
+        for i, conv in enumerate(self.conv_layers):
+            x = conv(x, edge_index)
+            if i < len(self.conv_layers) - 1:
+                x = F.elu(x)
+                x = F.dropout(x, p=self.dropout_rate, training=self.training)
+
+        return x
+
+
+class GraphSAGE(torch.nn.Module):
+    """
+    GraphSAGE built on PyG's SAGEConv. Same K-layer depth logic as GCN.
+    """
+
+    def __init__(self, in_features, hidden_dim, out_features, K, dropout_rate: float):
+        super().__init__()
+        self.dropout_rate = dropout_rate
+        self.k = K
+
+        if K >= 3:
+            self.conv_layers = nn.ModuleList([SAGEConv(in_features, hidden_dim)] +
+                                             [SAGEConv(hidden_dim, hidden_dim) for _ in range(K - 2)] +
+                                             [SAGEConv(hidden_dim, out_features)])
+        elif K == 2:
+            self.conv_layers = nn.ModuleList([SAGEConv(in_features, hidden_dim), SAGEConv(hidden_dim, out_features)])
+        elif K == 1:
+            self.conv_layers = nn.ModuleList([SAGEConv(in_features, out_features)])
+        else:
+            raise NotImplementedError
+
+    def forward(self, x, edge_index):
+        for i, conv in enumerate(self.conv_layers):
+            x = conv(x, edge_index)
+            if i < len(self.conv_layers) - 1:
+                x = F.relu(x)
+                x = F.dropout(x, p=self.dropout_rate, training=self.training)
+
+        return x
+
+
+class GIN(torch.nn.Module):
+    """
+    Graph Isomorphism Network built on PyG's GINConv.
+
+    Each GINConv wraps a small MLP (Linear -> ReLU -> Linear) used as the
+    injective aggregation function. Same K-layer depth logic as GCN.
+    """
+
+    @staticmethod
+    def _mlp(in_dim, out_dim):
+        return nn.Sequential(
+            nn.Linear(in_dim, out_dim),
+            nn.ReLU(),
+            nn.Linear(out_dim, out_dim),
+        )
+
+    def __init__(self, in_features, hidden_dim, out_features, K, dropout_rate: float):
+        super().__init__()
+        self.dropout_rate = dropout_rate
+        self.k = K
+
+        if K >= 3:
+            self.conv_layers = nn.ModuleList([GINConv(self._mlp(in_features, hidden_dim))] +
+                                             [GINConv(self._mlp(hidden_dim, hidden_dim)) for _ in range(K - 2)] +
+                                             [GINConv(self._mlp(hidden_dim, out_features))])
+        elif K == 2:
+            self.conv_layers = nn.ModuleList([GINConv(self._mlp(in_features, hidden_dim)),
+                                              GINConv(self._mlp(hidden_dim, out_features))])
+        elif K == 1:
+            self.conv_layers = nn.ModuleList([GINConv(self._mlp(in_features, out_features))])
+        else:
+            raise NotImplementedError
+
+    def forward(self, x, edge_index):
         for i, conv in enumerate(self.conv_layers):
             x = conv(x, edge_index)
             if i < len(self.conv_layers) - 1:

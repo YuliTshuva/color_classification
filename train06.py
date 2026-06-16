@@ -8,9 +8,9 @@ By convention the last color is used for testing.
 from models import *
 from utils import *
 from sklearn.metrics import roc_auc_score
+import csv
 import json
 import optuna
-from tqdm.auto import tqdm
 import os
 
 # Create a random seed for reproducibility
@@ -30,11 +30,12 @@ DISEASES = ['acute_and_unspecified_renal_failure', 'cardiac_dysrhythmias', 'cong
             'hypertension_with_complications_and_secondary_hypertension']
 
 
-def train(n_colors, data, hps, directed=False):
+def train(n_colors, data, hps, directed=False, plot=True):
     """
     Get the data and train the models for color classification.
     :param data: edge_index (2, edges), color_indices (n_vertices,), labels (n_colors,)
     :param n_colors: Amount of colors in the dataset.
+    :param plot: Whether to plot train/val losses after training.
     :return: The trained models: GNN, MLP, Color Embedding, Attention Classifier.
     """
     # Read the HPs from the file
@@ -87,8 +88,17 @@ def train(n_colors, data, hps, directed=False):
     # Set a loss for binary classification
     classification_loss = nn.BCEWithLogitsLoss()
 
-    # Create a training mask for the nodes without the test color index (the last color index)
-    training_mask = torch.isin(color_indices, test_colors, invert=True)
+    # Split non-test colors 80/20 into train and validation
+    all_colors = torch.arange(n_colors)
+    train_val_colors = all_colors[~torch.isin(all_colors, test_colors)]
+    n_val = max(1, int(len(train_val_colors) * 0.2))
+    perm = torch.randperm(len(train_val_colors), generator=torch.Generator().manual_seed(42))
+    val_colors = train_val_colors[perm[:n_val]]
+    train_colors = train_val_colors[perm[n_val:]]
+
+    training_mask = torch.isin(color_indices, train_colors)
+    val_mask = torch.isin(color_indices, val_colors)
+    test_mask = torch.isin(color_indices, test_colors)
 
     # Set the models to training mode
     gnn_model.train()
@@ -103,20 +113,25 @@ def train(n_colors, data, hps, directed=False):
     color_indices = color_indices.to(DEVICE)
     node_labels = node_labels.to(DEVICE)
     training_mask = training_mask.to(DEVICE)
+    val_mask = val_mask.to(DEVICE)
+    test_mask = test_mask.to(DEVICE)
 
     # Set optimizers for the models
     optimizer = torch.optim.Adam(list(gnn_model.parameters()) +
                                  list(mlp_model.parameters()) +
                                  list(color_embedding_model.parameters()), lr=LR)
 
-    # Set a variable to store the best loss achieved
-    best_loss, unimproved_epochs = torch.inf, 0
+    # Set a variable to store the best validation loss achieved
+    best_val_loss, unimproved_epochs = torch.inf, 0
 
     # Set a variable to store the best models
-    best_gnn, best_mlp, best_color_embedding, best_attention = None, None, None, None
+    best_gnn, best_mlp, best_color_embedding = None, None, None
+
+    # Track losses per epoch
+    train_losses, val_losses = [], []
 
     # Start the training loop
-    for epoch in tqdm(range(EPOCHS)):
+    for epoch in range(EPOCHS):
         # Embed the color indices for GNN input
         color_embeddings = color_embedding_model(color_indices)
 
@@ -164,8 +179,17 @@ def train(n_colors, data, hps, directed=False):
         loss.backward()
         optimizer.step()
 
-        if loss < best_loss * 0.99:
-            best_loss = loss
+        # Compute validation loss (no gradients needed)
+        with torch.no_grad():
+            train_loss = classification_loss(mlp_output[training_mask].detach(), node_labels[training_mask])
+            val_loss = classification_loss(mlp_output[val_mask].detach(), node_labels[val_mask])
+
+        train_losses.append(train_loss.item())
+        val_losses.append(val_loss.item())
+
+        # Early stopping based on validation loss
+        if val_loss < best_val_loss * 0.99:
+            best_val_loss = val_loss
             unimproved_epochs = 0
             # Save the best models' state dicts
             best_gnn = gnn_model.state_dict()
@@ -186,6 +210,20 @@ def train(n_colors, data, hps, directed=False):
     mlp_model.eval()
     color_embedding_model.eval()
 
+    if plot:
+        plt.figure(figsize=(10, 5))
+        plt.plot(train_losses, label='Train Loss')
+        plt.plot(val_losses, label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Training and Validation Loss')
+        plt.legend()
+        plt.tight_layout()
+        index = max(
+            [int(name.split("_")[0]) for name in os.listdir("plots") if name.endswith("_loss_decay.png")] + [0]) + 1
+        plt.savefig(join("plots", f"{index}_loss_decay.png"))
+        plt.close()
+
     # Predict the outputs for the entire dataset
     with torch.no_grad():
         # Embed the color indices for GNN input
@@ -199,18 +237,14 @@ def train(n_colors, data, hps, directed=False):
 
     # Calculate the predictions and scores
     gnn_scores = torch.sigmoid(mlp_output).squeeze()
-    # gnn_predictions = (gnn_scores > 0.5).long()
 
-    # Calculate the accuracies for the attention model and the gnn
+    # Calculate AUC-ROC over the train, validation, and test sets
     node_labels = node_labels.long()
-    # train_gnn_accuracy = (gnn_predictions[training_mask] == node_labels[training_mask]).float().mean().item()
-    # test_gnn_accuracy = (gnn_predictions[~training_mask] == node_labels[~training_mask]).float().mean().item()
-
-    # Calculate AUC-ROC for the attention model and the gnn over the training set
     train_gnn_auc = roc_auc_score(node_labels[training_mask].cpu().numpy(), gnn_scores[training_mask].cpu().numpy())
-    test_gnn_auc = roc_auc_score(node_labels[~training_mask].cpu().numpy(), gnn_scores[~training_mask].cpu().numpy())
+    val_gnn_auc = roc_auc_score(node_labels[val_mask].cpu().numpy(), gnn_scores[val_mask].cpu().numpy())
+    test_gnn_auc = roc_auc_score(node_labels[test_mask].cpu().numpy(), gnn_scores[test_mask].cpu().numpy())
 
-    return test_gnn_auc, train_gnn_auc
+    return test_gnn_auc, val_gnn_auc, train_gnn_auc
 
 
 def analyze_results():
@@ -327,12 +361,19 @@ def hyper_parameters_optimization():
                 return hp_tried[str(hps)]
 
             # Train the model with the current test color
-            test_gnn_auc, train_gnn_auc = train(n_colors, data=(edge_index, edge_relation, color_indices,
-                                                 labels, test_colors), hps=hps)
+            test_gnn_auc, val_gnn_auc, train_gnn_auc = train(n_colors, data=(edge_index, edge_relation, color_indices,
+                                                                             labels, test_colors), hps=hps, plot=True)
             total_auc += test_gnn_auc
 
-            # Print
-            print(f"\tDisease: {disease}\tTest GNN AUC: {test_gnn_auc:.4f}")
+            # Save results row to CSV
+            csv_path = join("results", "trial_results.csv")
+            write_header = not os.path.exists(csv_path)
+            with open(csv_path, "a", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=["trial", "disease", "train_gnn_auc", "val_gnn_auc", "test_gnn_auc"])
+                if write_header:
+                    writer.writeheader()
+                writer.writerow({"trial": trial.number, "disease": disease, "train_gnn_auc": round(train_gnn_auc, 4),
+                                 "val_gnn_auc": round(val_gnn_auc, 4), "test_gnn_auc": round(test_gnn_auc, 4)})
 
         # Normalize the total AUC by the number of diseases tested
         total_auc /= len(DISEASES)
@@ -342,7 +383,7 @@ def hyper_parameters_optimization():
 
         print("\nMean AUC:", total_auc)
 
-        print("*"*80, "\n")
+        print("*" * 80, "\n")
 
         # Save the updated hp_tried dictionary to the file
         with open(join("results", "hp_results.json"), "w") as f:
