@@ -1,0 +1,12 @@
+{
+    "{'color_embedding_dim': 32, 'gnn_embedding_dim': 64, 'gnn_hidden_dim': 16, 'k_gnn_layers': 2, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 16, 'mlp_dropout_rate': 0.0, 'k': 10, 'model': 'GIN'}": 0.9272107952165389,
+    "{'color_embedding_dim': 4, 'gnn_embedding_dim': 16, 'gnn_hidden_dim': 16, 'k_gnn_layers': 3, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 32, 'mlp_dropout_rate': 0.0, 'k': 5, 'model': 'GAT'}": 0.5359250415708872,
+    "{'color_embedding_dim': 8, 'gnn_embedding_dim': 64, 'gnn_hidden_dim': 256, 'k_gnn_layers': 2, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 64, 'mlp_dropout_rate': 0.0, 'k': 3, 'model': 'GIN'}": 0.8359252021956378,
+    "{'color_embedding_dim': 32, 'gnn_embedding_dim': 32, 'gnn_hidden_dim': 16, 'k_gnn_layers': 1, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 16, 'mlp_dropout_rate': 0.0, 'k': 20, 'model': 'GCN'}": 0.8964289403223697,
+    "{'color_embedding_dim': 16, 'gnn_embedding_dim': 64, 'gnn_hidden_dim': 64, 'k_gnn_layers': 2, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 128, 'mlp_dropout_rate': 0.0, 'k': 5, 'model': 'GIN'}": 0.9130642799321893,
+    "{'color_embedding_dim': 8, 'gnn_embedding_dim': 256, 'gnn_hidden_dim': 256, 'k_gnn_layers': 2, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 128, 'mlp_dropout_rate': 0.0, 'k': 3, 'model': 'GAT'}": 0.9003990068404413,
+    "{'color_embedding_dim': 8, 'gnn_embedding_dim': 64, 'gnn_hidden_dim': 64, 'k_gnn_layers': 2, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 16, 'mlp_dropout_rate': 0.0, 'k': 5, 'model': 'GAT'}": 0.6019662850908752,
+    "{'color_embedding_dim': 16, 'gnn_embedding_dim': 128, 'gnn_hidden_dim': 128, 'k_gnn_layers': 1, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 64, 'mlp_dropout_rate': 0.0, 'k': 20, 'model': 'GIN'}": 0.9376529453902908,
+    "{'color_embedding_dim': 32, 'gnn_embedding_dim': 32, 'gnn_hidden_dim': 128, 'k_gnn_layers': 1, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 32, 'mlp_dropout_rate': 0.0, 'k': 3, 'model': 'GAT'}": 0.9407844706806356,
+    "{'color_embedding_dim': 4, 'gnn_embedding_dim': 128, 'gnn_hidden_dim': 16, 'k_gnn_layers': 3, 'gnn_dropout_rate': 0.0, 'gnn_mlp_hidden_dims': 16, 'mlp_dropout_rate': 0.0, 'k': 5, 'model': 'GCN'}": 0.5285518391037163
+}

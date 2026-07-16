@@ -195,19 +195,22 @@ class ColorEmbedding(nn.Module):
         return self.color_embedding(x)
 
 
-class AttentionColorClassifier(nn.Module):
-    def __init__(self, dim, num_heads, num_classes):
+class AttentionClassifier(nn.Module):
+    def __init__(self, dim, num_heads, num_classes, attention_hidden_dims, attention_dropout_rate, n_layers):
         super().__init__()
         self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, batch_first=True)
         self.norm = nn.LayerNorm(dim)
-        self.mlp = MLP(input_dim=dim, hidden_dims=ATTENTION_HIDDEN_DIMS, output_dim=num_classes,
-                       dropout_rate=ATTENTION_DROPOUT_RATE)
+        self.mlp = MLP(input_dim=dim, hidden_dims=attention_hidden_dims, output_dim=num_classes,
+                       dropout_rate=attention_dropout_rate)
+        self.n_layers = n_layers
 
     def forward(self, x):
-        # Self-Attention
-        attn_output, _ = self.attn(x, x, x)
-        # Add & Norm
-        x = self.norm(attn_output + x)
+        # Apply multi-head attention and layer normalization for n_layers
+        for _ in range(self.n_layers):
+            # Self-Attention
+            attn_output, _ = self.attn(x, x, x)
+            # Add & Norm
+            x = self.norm(attn_output + x)
         # Classification
         return self.mlp(x)
 
@@ -402,21 +405,20 @@ class RGATLayer(nn.Module):
             dst = edge_index[1, mask]
 
             if not self.directed:
-                src = torch.cat([src, edge_index[1, mask]])
-                dst = torch.cat([dst, edge_index[0, mask]])
+                src, dst = torch.cat([src, dst]), torch.cat([dst, src])
 
-            E_r = src.size(0)
+            # Project all nodes once: [N, num_heads, head_dim]. Computing the
+            # attention logits from per-node halves (a^T[Wh_i||Wh_j] =
+            # a_src^T Wh_i + a_dst^T Wh_j) avoids materializing [E_r, out_dim]
+            # tensors for the logits - critical for large edge sets.
+            h = (x @ self.weight[r]).view(N, self.num_heads, self.head_dim)
+            a_src = self.attn[r][:, :self.head_dim]  # [num_heads, head_dim]
+            a_dst = self.attn[r][:, self.head_dim:]
+            s_src = (h * a_src).sum(dim=-1)  # [N, num_heads]
+            s_dst = (h * a_dst).sum(dim=-1)
 
-            # Linear transform: [E_r, out_dim] -> [E_r, num_heads, head_dim]
-            h_src = (x[src] @ self.weight[r]).view(E_r, self.num_heads, self.head_dim)
-            h_dst = (x[dst] @ self.weight[r]).view(E_r, self.num_heads, self.head_dim)
-
-            # Attention logits: concat source and target projections, dot with a_r
-            # attn[r]: [num_heads, 2*head_dim]
-            # cat([h_src, h_dst], dim=-1): [E_r, num_heads, 2*head_dim]
-            e = (torch.cat([h_src, h_dst], dim=-1) * self.attn[r]).sum(dim=-1)
             # e: [E_r, num_heads]
-            e = self.leaky_relu(e)
+            e = self.leaky_relu(s_src[src] + s_dst[dst])
 
             # Softmax over neighbors of each dst node, per head
             # We use scatter to compute the softmax denominator
@@ -433,9 +435,9 @@ class RGATLayer(nn.Module):
             # Optional attention dropout
             alpha = F.dropout(alpha, p=self.dropout, training=self.training)
 
-            # Weighted aggregation: alpha * h_src, then sum at dst
+            # Weighted aggregation: alpha * h[src], then sum at dst
             # [E_r, num_heads, head_dim]
-            weighted = alpha.unsqueeze(-1) * h_src
+            weighted = alpha.unsqueeze(-1) * h[src]
 
             agg = torch.zeros(N, self.num_heads, self.head_dim, device=x.device)
             agg.scatter_add_(

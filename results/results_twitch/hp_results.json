@@ -1,0 +1,783 @@
+{
+    "1": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 100,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                4
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 1
+        },
+        "sum_acc": 0.39970106445252895
+    },
+    "2": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 24,
+            "gnn_hidden_dim": 32,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                4,
+                4
+            ],
+            "gnn_dropout_rate": 0.5,
+            "mlp_dropout_rate": 0.2,
+            "alpha": 0.0001
+        },
+        "sum_acc": 0.0008230452658608556
+    },
+    "3": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": 24,
+            "k_gnn_layers": 3,
+            "gnn_mlp_hidden_dims": [
+                16
+            ],
+            "gnn_dropout_rate": 0.5,
+            "mlp_dropout_rate": 0.4,
+            "alpha": 0.1
+        },
+        "sum_acc": 0.13509556360077113
+    },
+    "4": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 24,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 3,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.1,
+            "mlp_dropout_rate": 0.3,
+            "alpha": 0.01
+        },
+        "sum_acc": 0.0
+    },
+    "5": {
+        "config": {
+            "color_embedding_dim": 4,
+            "gnn_embedding_dim": 24,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                16
+            ],
+            "gnn_dropout_rate": 0.2,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 0.1
+        },
+        "sum_acc": 0.360587545321323
+    },
+    "6": {
+        "config": {
+            "color_embedding_dim": 4,
+            "gnn_embedding_dim": 48,
+            "gnn_hidden_dim": 24,
+            "k_gnn_layers": 3,
+            "gnn_mlp_hidden_dims": [
+                10
+            ],
+            "gnn_dropout_rate": 0.5,
+            "mlp_dropout_rate": 0.5,
+            "alpha": 0.01
+        },
+        "sum_acc": 0.0
+    },
+    "7": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 16,
+            "gnn_hidden_dim": 48,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                16
+            ],
+            "gnn_dropout_rate": 0.2,
+            "mlp_dropout_rate": 0.3,
+            "alpha": 0.1
+        },
+        "sum_acc": 0.09339927474502474
+    },
+    "8": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 24,
+            "gnn_hidden_dim": 24,
+            "k_gnn_layers": 3,
+            "gnn_mlp_hidden_dims": [
+                16
+            ],
+            "gnn_dropout_rate": 0.1,
+            "mlp_dropout_rate": 0.4,
+            "alpha": 0.0001
+        },
+        "sum_acc": 0.0
+    },
+    "9": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 24,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.1,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 1
+        },
+        "sum_acc": 0.7854754086583853
+    },
+    "10": {
+        "config": {
+            "color_embedding_dim": 10,
+            "gnn_embedding_dim": 64,
+            "gnn_hidden_dim": 48,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.2,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 0.001
+        },
+        "sum_acc": 0.026276664022589102
+    },
+    "11": {
+        "config": {
+            "color_embedding_dim": 6,
+            "gnn_embedding_dim": 16,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                6
+            ],
+            "gnn_dropout_rate": 0.3,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 100.0
+        },
+        "sum_acc": 0.6254565231502056
+    },
+    "12": {
+        "config": {
+            "color_embedding_dim": 6,
+            "gnn_embedding_dim": 16,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                6
+            ],
+            "gnn_dropout_rate": 0.3,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 100.0
+        },
+        "sum_acc": 0.4195639891549945
+    },
+    "13": {
+        "config": {
+            "color_embedding_dim": 8,
+            "gnn_embedding_dim": 24,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                8
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 100.0
+        },
+        "sum_acc": 0.652327099815011
+    },
+    "14": {
+        "config": {
+            "color_embedding_dim": 4,
+            "gnn_embedding_dim": 16,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.2,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 1
+        },
+        "sum_acc": 0.26988022041041404
+    },
+    "15": {
+        "config": {
+            "color_embedding_dim": 6,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                10
+            ],
+            "gnn_dropout_rate": 0.2,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10.0
+        },
+        "sum_acc": 0.30374033376574516
+    },
+    "16": {
+        "config": {
+            "color_embedding_dim": 8,
+            "gnn_embedding_dim": 16,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                6
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10.0
+        },
+        "sum_acc": 0.28050047624856234
+    },
+    "17": {
+        "config": {
+            "color_embedding_dim": 6,
+            "gnn_embedding_dim": 16,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.1,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 100.0
+        },
+        "sum_acc": 0.5943145360797644
+    },
+    "18": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                6
+            ],
+            "gnn_dropout_rate": 0.2,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 10.0
+        },
+        "sum_acc": 0.3595288135111332
+    },
+    "19": {
+        "config": {
+            "color_embedding_dim": 8,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                6
+            ],
+            "gnn_dropout_rate": 0.1,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 10.0
+        },
+        "sum_acc": 0.6320954412221909
+    },
+    "20": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 24,
+            "gnn_hidden_dim": 16,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                8
+            ],
+            "gnn_dropout_rate": 0.1,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 100.0
+        },
+        "sum_acc": 0.8681135606020689
+    },
+    "21": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10.0
+        },
+        "sum_acc": 1.2576634511351585
+    },
+    "22": {
+        "config": {
+            "color_embedding_dim": 8,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 2,
+            "gnn_mlp_hidden_dims": [
+                6
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.0,
+            "alpha": 1
+        },
+        "sum_acc": 0.3179495008662343
+    },
+    "23": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 1000.0
+        },
+        "sum_acc": 2.5460101030766964
+    },
+    "24": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": 8,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 1000.0
+        },
+        "sum_acc": 0.7774672247469425
+    },
+    "25": {
+        "config": {
+            "color_embedding_dim": 4,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                10
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100.0
+        },
+        "sum_acc": 1.1070305965840816
+    },
+    "26": {
+        "config": {
+            "color_embedding_dim": 4,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                10
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10.0
+        },
+        "sum_acc": 0.8699050340801477
+    },
+    "27": {
+        "config": {
+            "color_embedding_dim": 6,
+            "gnn_embedding_dim": 28,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                14
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 1000.0
+        },
+        "sum_acc": 0.5581923015415668
+    },
+    "28": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                14
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10.0
+        },
+        "sum_acc": 0.9011962339282036
+    },
+    "29": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                10
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100.0
+        },
+        "sum_acc": 1.6203708928078413
+    },
+    "30": {
+        "config": {
+            "color_embedding_dim": 4,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                10
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 1000.0
+        },
+        "sum_acc": 1.2039604629389942
+    },
+    "31": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                10
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 1000.0
+        },
+        "sum_acc": 0.7261251509189606
+    },
+    "32": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 1.9426746536046267
+    },
+    "33": {
+        "config": {
+            "color_embedding_dim": 4,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100000.0
+        },
+        "sum_acc": 0.6685924045741558
+    },
+    "34": {
+        "config": {
+            "color_embedding_dim": 6,
+            "gnn_embedding_dim": 28,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                10
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100.0
+        },
+        "sum_acc": 1.1929113361984491
+    },
+    "35": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 1.8802454294636846
+    },
+    "36": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 0.49662612937390804
+    },
+    "37": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 0.5863371193408966
+    },
+    "38": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 1.7035625325515866
+    },
+    "39": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 1.459273837506771
+    },
+    "40": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 28,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 1.7066438370384276
+    },
+    "41": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100000.0
+        },
+        "sum_acc": 0.6506350317504257
+    },
+    "42": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 1.1117972545325756
+    },
+    "43": {
+        "config": {
+            "color_embedding_dim": 6,
+            "gnn_embedding_dim": 28,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                14
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 0.5013430062681437
+    },
+    "44": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 32,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100000.0
+        },
+        "sum_acc": 1.0916014611721039
+    },
+    "45": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100000.0
+        },
+        "sum_acc": 0.2363437139429152
+    },
+    "46": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 28,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 1.8570570945739746
+    },
+    "47": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 1000.0
+        },
+        "sum_acc": 1.5208597593009472
+    },
+    "48": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 1.555418549105525
+    },
+    "49": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 2.0209727250039577
+    },
+    "50": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 10000.0
+        },
+        "sum_acc": 0.18418657965958118
+    },
+    "51": {
+        "config": {
+            "color_embedding_dim": 5,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100000.0
+        },
+        "sum_acc": 1.2085918721277267
+    },
+    "52": {
+        "config": {
+            "color_embedding_dim": 3,
+            "gnn_embedding_dim": 36,
+            "gnn_hidden_dim": -1,
+            "k_gnn_layers": 1,
+            "gnn_mlp_hidden_dims": [
+                12
+            ],
+            "gnn_dropout_rate": 0.0,
+            "mlp_dropout_rate": 0.1,
+            "alpha": 100000.0
+        },
+        "sum_acc": 2.754025738686323
+    }
+}

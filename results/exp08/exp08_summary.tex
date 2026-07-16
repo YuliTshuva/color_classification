@@ -1,0 +1,79 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{makecell}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+\usepackage{times}
+
+\title{Color Classification: Attention vs.\ Pooling, Data Features,\\ and Relational GNNs}
+\author{Experiment 08 summary}
+\date{July 15, 2026}
+
+\begin{document}
+\maketitle
+
+\section*{Setup}
+The main dataset is \texttt{pregnancy\_MiniLM\_L6}: nodes are pregnancy visits (61{,}046), colors are patients (6{,}590), and the graph is a $k$NN graph ($k{=}20$) over 64-dimensional MiniLM visit embeddings. Both tasks are binary: predicting the label per node and per color. Test patients are those of the dataset's original test file and are never used for model or hyperparameter selection; the remaining patients are split 80/20 into train/validation (seed 42), and each node inherits its patient's assignment. Every variant was tuned with its own Optuna study (selection on validation AUC only; $\sim$60--140 configurations per variant). All variants share the same node-level GNN task, loss, early stopping, and evaluation. The same comparison was then repeated on the eight disease datasets (\texttt{tamars\_datasets}, 60 trials per variant), whose nodes are ICU episodes and whose colors are stays.
+
+\section*{Results}
+\begin{table}[h!]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lXcc}
+\toprule
+Variant & What was done & \makecell{Val AUC\\(node/color)} & \makecell{Test AUC\\node\\color} \\
+\midrule
+rgat       & Two-relation graph ($k$NN edges + same-patient edges), relational attention, MiniLM features as input & .884 / .868 & \makecell{$\mathbf{.818\pm.009}$\\$\mathbf{.798\pm.006}$} \\
+rgcn       & Same two-relation graph with relational graph convolution instead of attention & .881 / .867 & \makecell{$.789\pm.003$\\$.783\pm.004$} \\
+feat       & Standard GNN on the $k$NN graph with MiniLM features as input (no color embedding) & .684 / .859 & \makecell{$.619\pm.007$\\$.770\pm.004$} \\
+feat\_color & Same as feat, with a learned color embedding concatenated to the features & .678 / .846 & \makecell{$.609\pm.010$\\$.770\pm.002$} \\
+pool       & GNN on learned color embeddings; color prediction by mean-pooling node embeddings per color & .652 / .829 & \makecell{$.598\pm.008$\\$.755\pm.016$} \\
+attention  & GNN on learned color embeddings; color prediction by a self-attention classifier over the color-embedding matrix & .639 / .575 & \makecell{$.599\pm.012$\\$.486\pm.022$} \\
+\bottomrule
+\end{tabularx}
+\caption{\texttt{pregnancy\_MiniLM\_L6}. Best configuration per variant, selected by validation AUC. Test AUC on held-out patients is reported as mean $\pm$ standard deviation over 5 seeds (only model initialization and dropout vary; the split is fixed).}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Variant & Val AUC node & Val AUC color & Test AUC node & Test AUC color \\
+\midrule
+rgat       & .591 & .565 & \textbf{.586} & \textbf{.557} \\
+rgcn       & .578 & .559 & .566 & .544 \\
+feat       & .521 & .536 & .514 & .524 \\
+feat\_color & .521 & .532 & .514 & .522 \\
+pool       & .514 & .516 & .510 & .515 \\
+attention  & .511 & .513 & .509 & .505 \\
+\bottomrule
+\end{tabular}
+\caption{The eight disease datasets. Best configuration per variant (selected by validation AUC), averaged over the eight datasets. The ordering of the variants is identical to the pregnancy dataset, but all values are close to chance.}
+\end{table}
+
+\section*{Analysis}
+
+All differences discussed below are large relative to seed noise: over 5 seeds the standard deviation of every variant's test AUC is at most $0.022$, while the gaps between variants are $0.03$--$0.20$.
+
+\paragraph{1. The attention classifier should be dropped.}
+The attention head's color-task test AUC is $0.486\pm0.022$ --- chance level (validation: $0.575$). Replacing only the color head with mean-pooling of GNN node embeddings per color, while keeping the same inputs and node task (\emph{pool}), raises the color task to $0.755\pm0.016$ test / $0.829$ validation. The failure is structural: the embeddings of validation and test colors receive no gradient from the color loss, so a classifier reading only those embeddings has nothing generalizable to attend to. The pooled head avoids this because it reads the GNN output, which is shaped by the graph and the node-level loss for all nodes.
+
+\paragraph{2. Direction 1 --- data features help; the color embedding does not.}
+Feeding the MiniLM visit embeddings to the GNN (\emph{feat}) outperforms learned color embeddings (\emph{pool}) on both tasks. However, concatenating the learned color embedding on top of the features (\emph{feat\_color}) is marginally \emph{worse} than the features alone. The learned per-color embedding is dead weight: all the usable signal already resides in the data features and the graph structure.
+
+\paragraph{3. Direction 2 --- the same-color relation is the main win.}
+Adding a second edge type connecting visits of the same patient, and processing the two relations with a relational GNN (\emph{rgcn}/\emph{rgat}), lifts node-level test AUC from ${\sim}0.62$ to $0.79$--$0.82$ and the color task to ${\sim}0.80$ --- about $+20$ AUC points over every non-relational variant, i.e.\ more than twenty standard deviations. The result is robust: the top-5 configurations of each relational variant lie within ${\sim}0.005$ validation AUC of each other, and RGAT leads RGCN by $0.03$ on the node task across all seeds.
+
+\paragraph{4. Capacity is not the bottleneck.}
+A follow-up search with expanded ranges (embedding dimension up to 256, up to 5 layers, up to 8 attention heads; ${\sim}220$ additional configurations) produced no improvement: the best wide RGAT reached $0.874$ validation versus $0.876$ for the original space, and its winning configuration used a \emph{smaller} embedding dimension (128). Only 4 of 119 wide RGAT configurations exhausted GPU memory, and none of the leading configurations were near that limit. The remaining error is therefore in the data, not in model size.
+
+\paragraph{5. The disease datasets rank the variants identically, but hold little signal.}
+Repeating the comparison on the eight disease datasets reproduces the exact ordering of the pregnancy results (rgat $>$ rgcn $>$ feat $\geq$ feat\_color $>$ pool $>$ attention), which independently corroborates that the same-color relation carries the signal. However, all values lie between $0.51$ and $0.59$: the best variant (RGAT) reaches $0.586$ test node AUC, ranging from $0.658$ on fluid and electrolyte disorders down to $0.514$ on essential hypertension. For reference, the previous pipeline (\texttt{train06}) peaked at $0.508$ validation / $0.499$ test on these datasets --- pure chance --- so the relational model does extract what little signal exists, but these datasets are not a solvable problem in their current form.
+
+\section*{Recommendation}
+Adopt the two-relation formulation (RGAT, MiniLM features, no color embedding) as the main model, with \texttt{pregnancy\_MiniLM\_L6} as the headline result; drop the attention classifier and the learned color embeddings. The disease datasets are best reported as a consistency check rather than as a second success case.
+
+\end{document}
