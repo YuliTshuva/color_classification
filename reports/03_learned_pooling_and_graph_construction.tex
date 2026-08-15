@@ -1,0 +1,126 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{times}
+
+\title{Experiments 09 and 10:\\ Two Ideas That Did Not Help}
+\author{}
+\date{July 31, 2026}
+
+\begin{document}
+\maketitle
+
+\section*{What we tested}
+
+After experiment 08, two parts of the pipeline were still hand-made instead of learned:
+
+\begin{enumerate}
+  \item \textbf{The readout} --- how the model turns the predictions of the patients in a color
+        into one prediction for the whole color. Until now this was a plain average.
+  \item \textbf{The graph} --- which patients get connected to which. Until now every patient was
+        connected to its 20 most similar patients.
+\end{enumerate}
+
+Experiment 09 tried five better readouts. Experiment 10 tried better ways to build the graph.
+Everything else was kept exactly as in experiment 08, so the numbers can be compared directly.
+Dataset: \texttt{pregnancy\_MiniLM\_L6} (61{,}046 visits, 6{,}590 patients).
+
+\section*{Experiment 09: the readout}
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{lXc}
+\toprule
+Readout & What it does & Test AUC (color) \\
+\midrule
+\texttt{mean} & Simple average (the old method) & $\mathbf{.798 \pm .004}$ \\
+\texttt{gated\_attn} & Learns how much each patient counts & $.796 \pm .005$ \\
+\texttt{node\_score\_mean} & Averages the patient scores; \emph{no learning at all} & $.796 \pm .002$ \\
+\texttt{pma} & Attention-based pooling & $.795 \pm .004$ \\
+\texttt{supernode} & An extra node per color that collects the information & $.795 \pm .009$ \\
+\texttt{multistat} & Average, maximum and sum together & $.792 \pm .007$ \\
+\bottomrule
+\end{tabularx}
+\caption{Best setting for each readout, 5 runs each. About 246 settings were tried in total.}
+\end{table}
+
+\paragraph{Nothing beat the simple average.} All six numbers sit inside the normal run-to-run noise.
+Each new readout got the same amount of tuning as the old one and ended up in the same place.
+
+\paragraph{The most telling row is \texttt{node\_score\_mean}.} It has no learning for the color task
+at all --- it just averages the per-patient scores. It matches everything else. So the information
+the color task needs is already in the per-patient predictions, and no clever way of combining them
+adds anything.
+
+\paragraph{One method was clearly worse.} \texttt{multistat} adds the \emph{sum} of the patient
+vectors. Colors contain between 1 and 221 patients, so that sum mostly measures how big the color is,
+not what is in it. This confused the model.
+
+\paragraph{Verdict.} Keep the simple average. This part of the pipeline is closed.
+
+\section*{Experiment 10: the graph}
+
+Instead of always connecting each patient to exactly 20 others, we let the number of connections
+change: keep a few nearest neighbours for everyone, and add any other patient that is similar enough.
+We also tried three different ways of measuring similarity.
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{llXc}
+\toprule
+Model & Graph & Best setting found & Test AUC (color) \\
+\midrule
+rgat & flexible & avg.\ 62.8 connections & $\mathbf{.800 \pm .003}$ \\
+rgat & 20 neighbours & the old graph (avg.\ 31.9) & $.796 \pm .002$ \\
+rgcn & flexible & avg.\ 62.1 connections & $.785 \pm .002$ \\
+rgcn & 20 neighbours & the old graph (avg.\ 31.9) & $.771 \pm .002$ \\
+\bottomrule
+\end{tabularx}
+\caption{Best setting per graph, 5 runs each.}
+\end{table}
+
+\paragraph{The winner is not really a flexible graph.} The best setting keeps almost every candidate
+connection: for 77\% of the patients nothing is removed at all. So it is simply a denser graph, not an
+adaptive one.
+
+\paragraph{More connections does not mean better.} There is no relationship between the number of
+connections and the score. Settings with 9 connections per patient and settings with 63 give the same
+result. The way similarity is measured does not matter either.
+
+\paragraph{The small gain is probably not real.} The flexible graph did get slightly better numbers,
+but it was also given more than twice as many settings to try ($\sim$95 vs.\ 40). The extra tuning
+most likely found a slightly better \emph{model}, not a better graph.
+
+\paragraph{The best model has not improved.} The best result here is $.800 \pm .003$, against
+$.798 \pm .006$ in experiment 08. After about 460 settings, we are where we started.
+
+\section*{One measurement worth remembering}
+
+While building experiment 10 we found something more interesting than the experiment itself:
+\textbf{all the patient embeddings look almost identical to each other.} Two random patients have a
+similarity of $.979$ out of $1$. So the ``20 nearest neighbours'' are chosen by differences in the
+fourth decimal place.
+
+We tried two standard fixes (centering and whitening). They do spread the numbers out, and they change
+the neighbours almost completely --- but they do not help. In every version, a patient's neighbours
+share its label only $1.4$ points above pure chance ($.832$ vs.\ $.818$).
+
+In other words: the neighbour connections barely carry any information about the label. This fits what
+experiment 08 already showed --- the entire $+20$ point improvement came from the \emph{same-color}
+connections, not from the neighbour connections.
+
+\section*{What to do next}
+
+\begin{enumerate}
+  \item \textbf{Quick check first.} Rerun the old 20-neighbour graph with the same number of tuning
+        trials as the flexible graph. If the gap disappears, experiment 10 is a clean negative result
+        like experiment 09.
+  \item \textbf{Then look elsewhere.} The readout is not the problem and the graph shape is not the
+        problem. What is left is (a) the patient embeddings themselves, which are very poorly spread
+        out, and (b) the same-color connections --- the only part of the pipeline that has ever been
+        shown to matter.
+\end{enumerate}
+
+\end{document}

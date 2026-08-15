@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{llXcc}
+\toprule
+Backbone & Readout & What was done & \makecell{Val AUC\\(node/color)} & \makecell{Test AUC\\node\\color} \\
+\midrule
+rgat & \texttt{mean} & Control (exp08). Parameter-free mean of the member node embeddings, then a color MLP & 0.874 / 0.866 & \makecell{0.818 $\pm$ 0.004\\0.798 $\pm$ 0.004} \\
+rgat & \texttt{gated\_attn} & 1.1 Gated attention (MIL) pooling; scores softmax-normalized within each color & 0.866 / 0.865 & \makecell{0.809 $\pm$ 0.006\\0.796 $\pm$ 0.005} \\
+rgat & \texttt{node\_score\_mean} & Baseline. Color score is the mean of the node head's sigmoid scores; no color head & 0.872 / 0.863 & \makecell{0.810 $\pm$ 0.006\\0.796 $\pm$ 0.002} \\
+rgat & \texttt{pma} & 1.4 Pooling by Multihead Attention, optionally after self-attention among the members & 0.874 / 0.863 & \makecell{0.811 $\pm$ 0.005\\0.795 $\pm$ 0.004} \\
+rgat & \texttt{supernode} & 1.2 One virtual node per color as a third relation; its embedding feeds the color head & 0.888 / 0.865 & \makecell{0.810 $\pm$ 0.006\\0.795 $\pm$ 0.009} \\
+rgat & \texttt{multistat} & 1.3 Multi-statistic readout: mean || max || sum concatenated before the color MLP & 0.870 / 0.870 & \makecell{0.794 $\pm$ 0.007\\0.792 $\pm$ 0.007} \\
+\bottomrule
+\end{tabularx}
+\caption{\texttt{pregnancy}. Best configuration per readout, selected by validation AUC. Test AUC is the mean ± standard deviation over 5 seeds (only model init and dropout vary; the split is fixed).}
+\label{tab:exp09-pooling}
+\end{table}

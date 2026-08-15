@@ -1,0 +1,16 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{llXlcc}
+\toprule
+Backbone & Graph & What was done & \makecell{Best graph\\(mean deg)} & \makecell{Val AUC\\(node/color)} & \makecell{Test AUC\\node\\color} \\
+\midrule
+rgat & \texttt{hybrid} & 2.2 $k_{core}$NN core plus every candidate above a similarity threshold $\tau$; degree adapts to local density, and the similarity space is swept & raw, q=0.2, k\_core=3, tau=0.9990, merged (62.8) & 0.878 / 0.863 & \makecell{0.817 $\pm$ 0.006\\0.800 $\pm$ 0.003} \\
+rgat & \texttt{knn20} & Control (exp08). Cosine $k$NN at a fixed $k=20$; every node gets exactly 20 neighbours & raw, k=20 (31.9) & 0.875 / 0.862 & \makecell{0.810 $\pm$ 0.007\\0.796 $\pm$ 0.002} \\
+rgcn & \texttt{hybrid} & 2.2 $k_{core}$NN core plus every candidate above a similarity threshold $\tau$; degree adapts to local density, and the similarity space is swept & raw, q=0.2, k\_core=1, tau=0.9990, merged (62.1) & 0.881 / 0.860 & \makecell{0.789 $\pm$ 0.003\\0.785 $\pm$ 0.002} \\
+rgcn & \texttt{knn20} & Control (exp08). Cosine $k$NN at a fixed $k=20$; every node gets exactly 20 neighbours & raw, k=20 (31.9) & 0.872 / 0.857 & \makecell{0.776 $\pm$ 0.001\\0.771 $\pm$ 0.002} \\
+\bottomrule
+\end{tabularx}
+\caption{\texttt{pregnancy}. Best configuration per graph, selected by validation AUC. Test AUC is the mean ± standard deviation over 5 seeds (only model init and dropout vary; the split is fixed).}
+\label{tab:exp10-graph}
+\end{table}
