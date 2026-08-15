@@ -3,3 +3,12 @@ data/
 models/
 __pycache__/
 .idea/
+venv/
+logs/
+aside/plots_old/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.synctex.gz
