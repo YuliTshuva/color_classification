@@ -4,6 +4,7 @@ Helper functions.
 """
 
 # Imports
+import constants
 from constants import *
 import torch
 import pandas as pd
@@ -161,7 +162,7 @@ def load_pregnancy_data(k=10):
     :return:
     """
     # Set the base dir
-    base_dir = join("data", "pregnancy_MiniLM_L6", f"k_{k}")
+    base_dir = join(constants.PREGNANCY_DIR, f"k_{k}")
     # Load the edges
     with open(join(base_dir, "edges.txt"), "r") as f:
         edges_text = f.read()

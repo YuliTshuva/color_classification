@@ -48,6 +48,13 @@ Usage (server), one process per graph:
   python train10.py --graph hybrid --trials 100
   python train10.py --graph hybrid --smoke            # quick sanity run
 
+Featureless ablation (--node-input, see NODE_INPUTS): drops the embeddings from
+the GNN input while leaving the kNN graph - which is still built from them -
+alone. Asks how much of the score was the features and how much was the graph.
+Those runs write to results/exp10/<dataset>-<node input>/, so nothing already
+reported is touched:
+  python train10.py --graph hybrid --node-input learned
+
 Error bars, after the studies are done:
   python train10.py --graph hybrid --seed-eval --seeds 5
 
@@ -60,8 +67,10 @@ Results:
 # Imports
 from models import *
 from utils import load_pregnancy_data, load_disease_data
-from train08 import (DISEASES, EPOCHS, LR, TOLERANCE, SEED, set_seed, normalize_features,
-                     build_same_color_edges, load_pregnancy_node_features, load_disease_node_features)
+from train08 import (DISEASES, EPOCHS, LR, TOLERANCE, SEED, NODE_INPUTS, set_seed, normalize_features,
+                     build_same_color_edges, load_pregnancy_node_features, load_disease_node_features,
+                     resolve_dataset, resolve_node_input, results_tag, build_node_input)
+import constants
 from graph_construction import SIM_SPACES, build_hybrid_edges, load_candidates
 from sklearn.metrics import roc_auc_score
 import argparse
@@ -157,8 +166,7 @@ def train(graph, backbone, n_colors, data, hps, features, candidates, name,
     test_mask = torch.isin(color_indices, test_colors)
 
     # --- Inputs
-    feat = normalize_features(features, split == 0, hps["feature_norm"])
-    feat_dim = feat.size(1)
+    feat, feat_module, feat_dim = build_node_input(features, split, hps, n_nodes)
 
     # --- Relational graph. The RGCN/RGAT layers symmetrize internally
     # (directed=False), so each pair is supplied once.
@@ -167,6 +175,8 @@ def train(graph, backbone, n_colors, data, hps, features, candidates, name,
 
     # --- Modules
     modules = {}
+    if feat_module is not None:
+        modules["node_input"] = feat_module
     if backbone == "rgcn":
         modules["gnn"] = RGCN(in_dim=feat_dim, hidden_dim=hps["gnn_hidden_dim"],
                               out_dim=hps["gnn_embedding_dim"], num_relations=num_relations,
@@ -187,7 +197,8 @@ def train(graph, backbone, n_colors, data, hps, features, candidates, name,
     for m in modules.values():
         m.to(DEVICE)
         m.train()
-    feat = feat.to(DEVICE)
+    if feat is not None:
+        feat = feat.to(DEVICE)
     rel_edge_index, rel_edge_type = rel_edge_index.to(DEVICE), rel_edge_type.to(DEVICE)
     color_indices = color_indices.to(DEVICE)
     color_labels, node_labels = color_labels.to(DEVICE), node_labels.to(DEVICE)
@@ -198,8 +209,12 @@ def train(graph, backbone, n_colors, data, hps, features, candidates, name,
     params = [p for m in modules.values() for p in m.parameters()]
     optimizer = torch.optim.AdamW(params, lr=LR, weight_decay=hps["weight_decay"])
 
+    def node_x():
+        """The GNN input: a fixed tensor, or the trainable table when learned."""
+        return feat if feat_module is None else modules["node_input"].weight
+
     def forward():
-        h = modules["gnn"](feat, rel_edge_index, rel_edge_type)
+        h = modules["gnn"](node_x(), rel_edge_index, rel_edge_type)
         node_logits = modules["node_mlp"](h).squeeze(-1)
         pooled = modules["readout"](h, color_indices, n_colors)
         color_out = modules["color_head"](pooled).squeeze(-1)
@@ -272,10 +287,17 @@ def sample_hps(trial, graph, backbone, k_range, quantiles, k_cores, sim_spaces):
         "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", [0.0, 0.1, 0.2]),
         "color_mlp_hidden_dims": trial.suggest_categorical("color_mlp_hidden_dims", [32, 50, 64]),
         "weight_decay": trial.suggest_categorical("weight_decay", [0.0, 1e-5, 1e-4, 1e-3, 1e-2]),
-        "feature_norm": trial.suggest_categorical("feature_norm", ["none", "l2", "standardize"]),
         "graph": graph,
         "backbone": backbone,
     }
+    if constants.NODE_INPUT == "feat":
+        hps["feature_norm"] = trial.suggest_categorical("feature_norm", ["none", "l2", "standardize"])
+    else:
+        # Recorded so the arm is visible in the logged hps. "feat" is left out on
+        # purpose, so the existing hp_results.json caches still match.
+        hps["node_input"] = constants.NODE_INPUT
+        if constants.NODE_INPUT in ("random", "learned"):
+            hps["node_input_dim"] = trial.suggest_categorical("node_input_dim", [32, 64, 128])
     if backbone == "rgat":
         hps["num_heads"] = trial.suggest_categorical("num_heads", [2, 4])
 
@@ -360,7 +382,7 @@ def make_row(graph, backbone, trial, name, metrics, stats, hps):
 
 
 def results_dir_of(dataset, backbone, graph):
-    return join("results", "exp10", dataset, f"{backbone}_{graph}")
+    return join("results", "exp10", results_tag(dataset), f"{backbone}_{graph}")
 
 
 def run_study(dataset, graph, backbone, trials, k_range, quantiles, k_cores, sim_spaces,
@@ -435,7 +457,7 @@ def best_hps_of(dataset, backbone, graph):
 
 def run_seed_eval(dataset, graph, backbone, seeds, k_range, diseases, epochs=EPOCHS):
     """Retrain the study's best config over several seeds, for error bars."""
-    csv_path = join("results", "exp10", dataset, "seed_results.csv")
+    csv_path = join("results", "exp10", results_tag(dataset), "seed_results.csv")
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
     hps = best_hps_of(dataset, backbone, graph)
@@ -468,8 +490,13 @@ def main():
     parser = argparse.ArgumentParser(description="Run the graph-construction (Channel 2) experiments.")
     parser.add_argument("--graph", required=True, choices=GRAPHS)
     parser.add_argument("--backbone", type=str, default="rgat", choices=BACKBONES)
-    parser.add_argument("--dataset", type=str, default="pregnancy", choices=["diseases", "pregnancy"])
+    parser.add_argument("--dataset", type=str, default="pregnancy",
+                        help="diseases, pregnancy, or another data/ folder with the pregnancy "
+                             "layout (e.g. pregnancy_C for the anti-collapse embeddings)")
     parser.add_argument("--trials", type=int, default=60)
+    parser.add_argument("--node-input", type=str, default="feat", choices=NODE_INPUTS,
+                        help="What the GNN reads at its input layer. Anything but 'feat' drops the "
+                             "embeddings from the input and writes to results/exp10/<dataset>-<node input>/")
     parser.add_argument("--k", type=int, nargs="+", default=[20],
                         help="Prebuilt kNN graphs for the knn20 control; also supplies node metadata.")
     parser.add_argument("--quantiles", type=float, nargs="+",
@@ -489,15 +516,17 @@ def main():
                         help="Quick sanity run: 1 dataset, 1 trial, few epochs")
     args = parser.parse_args()
 
+    dataset = resolve_dataset(args.dataset)
+    resolve_node_input(args.node_input)
     if args.seed_eval:
-        run_seed_eval(args.dataset, args.graph, args.backbone, args.seeds, args.k, args.diseases,
+        run_seed_eval(dataset, args.graph, args.backbone, args.seeds, args.k, args.diseases,
                       epochs=args.epochs)
     elif args.smoke:
-        run_study(args.dataset, args.graph, args.backbone, trials=1, k_range=args.k,
+        run_study(dataset, args.graph, args.backbone, trials=1, k_range=args.k,
                   quantiles=args.quantiles, k_cores=args.k_cores, sim_spaces=args.sim_spaces,
                   diseases=args.diseases[:1], epochs=15)
     else:
-        run_study(args.dataset, args.graph, args.backbone, trials=args.trials, k_range=args.k,
+        run_study(dataset, args.graph, args.backbone, trials=args.trials, k_range=args.k,
                   quantiles=args.quantiles, k_cores=args.k_cores, sim_spaces=args.sim_spaces,
                   diseases=args.diseases, epochs=args.epochs)
 

@@ -119,6 +119,7 @@ def trials_for(args, graph):
 def study_jobs(args):
     return [(f"exp10_{b}_{g}",
              [sys.executable, "train10.py", "--graph", g, "--backbone", b,
+              "--node-input", args.node_input,
               "--dataset", args.dataset, "--trials", str(trials_for(args, g)),
               "--epochs", str(args.epochs), "--sim-spaces"] + args.sim_spaces)
             for b in args.backbones for g in args.graphs]
@@ -127,6 +128,7 @@ def study_jobs(args):
 def seed_jobs(args):
     return [(f"exp10_{b}_{g}_seeds",
              [sys.executable, "train10.py", "--graph", g, "--backbone", b,
+              "--node-input", args.node_input,
               "--dataset", args.dataset, "--seed-eval", "--seeds", str(args.seeds),
               "--epochs", str(args.epochs)])
             for b in args.backbones for g in args.graphs]
@@ -377,14 +379,26 @@ def report(dataset, backbones, graphs):
     print(f"\nWritten: {join(out_dir, 'summary.md')}, summary.tex, summary.csv")
 
 
+def results_tag(dataset, node_input):
+    """Mirrors train08.results_tag, without importing torch into the driver."""
+    return dataset if node_input == "feat" else f"{dataset}-{node_input}"
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run and report the exp10 graph-construction comparison.")
-    parser.add_argument("--dataset", type=str, default="pregnancy", choices=["pregnancy", "diseases"])
+    parser.add_argument("--dataset", type=str, default="pregnancy",
+                        help="diseases, pregnancy, or another data/ folder with the pregnancy "
+                             "layout (e.g. pregnancy_C for the anti-collapse embeddings)")
     parser.add_argument("--backbones", type=str, nargs="+", default=["rgat"], choices=["rgat", "rgcn"])
     parser.add_argument("--graphs", type=str, nargs="+", default=GRAPHS, choices=GRAPHS)
     parser.add_argument("--trials", type=int, default=60, help="Optuna trials for the knn20 control")
     parser.add_argument("--hybrid-trials", type=int, default=150,
                         help="Optuna trials for the hybrid graph, which has four extra hyperparameters")
+    parser.add_argument("--node-input", type=str, default="feat",
+                        choices=["feat", "const", "random", "learned"],
+                        help="What the GNN reads at its input layer, passed through to train10.py. "
+                             "Anything but 'feat' drops the embeddings from the input (the graph "
+                             "is still built from them) and writes to results/exp10/<dataset>-<node input>/")
     parser.add_argument("--sim-spaces", type=str, nargs="+",
                         default=["raw", "centered", "whitened"],
                         choices=["raw", "centered", "whitened"],
@@ -422,7 +436,7 @@ def main():
 
     if args.stage in ("all", "report"):
         print("\n=== Stage 4/4: report ===")
-        report(args.dataset, args.backbones, args.graphs)
+        report(results_tag(args.dataset, args.node_input), args.backbones, args.graphs)
 
     if failed:
         print(f"\nFailed jobs: {failed} - check logs/<name>.log and rerun.")

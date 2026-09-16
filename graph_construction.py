@@ -70,6 +70,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+import constants
 
 SIM_SPACES = ["raw", "centered", "whitened"]
 
@@ -78,7 +79,7 @@ def dataset_dir(dataset, name="pregnancy"):
     """Folder holding a dataset's embeddings and its k_* graph folders."""
     if dataset == "diseases":
         return join("data", "tamars_datasets", name)
-    return join("data", "pregnancy_MiniLM_L6")
+    return constants.PREGNANCY_DIR
 
 
 def candidate_path(dataset, name, k_max, space):
@@ -342,7 +343,9 @@ def describe(dataset, name, k_max, spaces=SIM_SPACES, k_cores=(2,),
 def main():
     parser = argparse.ArgumentParser(
         description="Precompute and inspect the candidate neighbours for the exp10 hybrid graph.")
-    parser.add_argument("--dataset", type=str, default="pregnancy", choices=["pregnancy", "diseases"])
+    parser.add_argument("--dataset", type=str, default="pregnancy",
+                        help="diseases, pregnancy, or another data/ folder with the pregnancy "
+                             "layout (e.g. pregnancy_C for the anti-collapse embeddings)")
     parser.add_argument("--names", type=str, nargs="+", default=None,
                         help="Disease names; defaults to all of them for --dataset diseases.")
     parser.add_argument("--k-max", type=int, default=50)
@@ -353,9 +356,11 @@ def main():
     args = parser.parse_args()
 
     # Imported here so the module stays importable without the training stack
-    from train08 import DISEASES, load_disease_node_features, load_pregnancy_node_features
+    from train08 import (DISEASES, load_disease_node_features, load_pregnancy_node_features,
+                         resolve_dataset)
     from utils import load_disease_data, load_pregnancy_data
 
+    args.dataset = resolve_dataset(args.dataset)
     names = args.names or (DISEASES if args.dataset == "diseases" else ["pregnancy"])
     for name in names:
         print(f"\n=== {name} ===")

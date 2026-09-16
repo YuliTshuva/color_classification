@@ -1,0 +1,14 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{llXlcc}
+\toprule
+Backbone & Graph & What was done & \makecell{Best graph\\(mean deg)} & \makecell{Val AUC\\(node/color)} & \makecell{Test AUC\\node\\color} \\
+\midrule
+rgat & \texttt{hybrid} & 2.2 $k_{core}$NN core plus every candidate above a similarity threshold $\tau$; degree adapts to local density, and the similarity space is swept & raw, q=0.3, k\_core=3, tau=0.9992, split (54.7) & 0.780 / 0.812 & \makecell{0.683 $\pm$ 0.012\\0.705 $\pm$ 0.020} \\
+rgat & \texttt{knn20} & Control (exp08). Cosine $k$NN at a fixed $k=20$; every node gets exactly 20 neighbours & raw, k=20 (31.9) & 0.778 / 0.762 & \makecell{0.678 $\pm$ 0.040\\0.670 $\pm$ 0.029} \\
+\bottomrule
+\end{tabularx}
+\caption{\texttt{pregnancy-learned}. Best configuration per graph, selected by validation AUC. Test AUC is the mean ± standard deviation over 5 seeds (only model init and dropout vary; the split is fixed).}
+\label{tab:exp10-graph}
+\end{table}

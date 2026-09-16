@@ -29,6 +29,13 @@ Usage (server), one process per variant:
   python train08.py --variant pool --dataset pregnancy --trials 100
   python train08.py --variant rgcn --smoke               # quick sanity run
 
+Featureless ablation (--node-input, see NODE_INPUTS): drops the embeddings from
+the GNN input while leaving the kNN graph - which is still built from them -
+alone. Asks how much of the score was the features and how much was the graph.
+Those runs write to results/exp08/<dataset>-<node input>/, so nothing already
+reported is touched:
+  python train08.py --variant rgat --dataset pregnancy --node-input learned
+
 Results:
   results/exp08/<dataset>/<variant>/trial_results.csv  (one row per trial x
                           disease, includes the full hps as a json column)
@@ -36,6 +43,7 @@ Results:
 """
 
 # Imports
+import constants
 from models import *
 from utils import *
 from sklearn.metrics import roc_auc_score
@@ -60,6 +68,21 @@ DISEASES = ['acute_and_unspecified_renal_failure', 'cardiac_dysrhythmias', 'cong
 VARIANTS = ["attention", "pool", "feat", "feat_color", "rgcn", "rgat"]
 FEATURE_VARIANTS = {"feat", "feat_color", "rgcn", "rgat"}
 RELATIONAL_VARIANTS = {"rgcn", "rgat"}
+
+# What the feature variants read at the GNN input layer. "feat" is the node
+# embeddings and reproduces every result so far. The other three drop them and
+# are the featureless ablation; the kNN edges are still built from the
+# embeddings, so the question being asked is whether the graph alone carries the
+# signal the features used to supply.
+#   const   : one shared all-ones vector. Both backbones average over
+#             neighbours, so every connected node comes out identical - this is
+#             the provable floor, kept only as a sanity check.
+#   random  : a fixed random vector per node, never trained. Nodes are
+#             distinguishable but carry no semantics.
+#   learned : a free trainable vector per node (transductive). The strongest
+#             featureless model: whatever the graph can teach, it can store.
+NODE_INPUTS = ["feat", "const", "random", "learned"]
+NODE_INPUT_SEED = 1234
 
 
 def set_seed(seed=SEED):
@@ -96,13 +119,56 @@ def load_disease_node_features(disease):
     return torch.tensor(emb, dtype=torch.float)
 
 
+def resolve_dataset(dataset):
+    """
+    Resolve a --dataset value, allowing alternative pregnancy embedding sets.
+
+    "diseases" and "pregnancy" behave exactly as before. Any other value names a
+    folder under data/ with the pregnancy layout (train/test_embeddings.npy plus
+    k_*/), e.g. "pregnancy_C" for the anti-collapse variant C encoder, and points
+    the loaders at it. The string is returned unchanged so it also becomes the
+    results folder name: runs on different embeddings can never overwrite each
+    other, and every dataset branch still only has to test for "diseases".
+
+    :return: the dataset name, to be used for branching and for results paths.
+    """
+    if dataset not in ("diseases", "pregnancy"):
+        folder = join(DATA_DIR, dataset)
+        if not os.path.isdir(folder):
+            raise SystemExit(f"Unknown dataset '{dataset}': no such folder {folder}")
+        constants.PREGNANCY_DIR = folder
+    return dataset
+
+
+def resolve_node_input(node_input):
+    """
+    Set the input layer for this process. Like resolve_dataset, this is a
+    run-level switch kept in constants so every helper can read it without
+    threading it through each signature.
+    :return: the node input name.
+    """
+    if node_input not in NODE_INPUTS:
+        raise SystemExit(f"Unknown node input '{node_input}': pick one of {NODE_INPUTS}")
+    constants.NODE_INPUT = node_input
+    return node_input
+
+
+def results_tag(dataset, node_input=None):
+    """
+    Results folder of a run. Featureless runs get their own tree, so they can
+    never overwrite - or be silently mixed into - the numbers already reported.
+    """
+    node_input = node_input or constants.NODE_INPUT
+    return dataset if node_input == "feat" else f"{dataset}-{node_input}"
+
+
 def load_pregnancy_node_features():
     """
     Pregnancy graph nodes are simply all rows of train then test embeddings
     (no filtering in data/pregnancy_data_to_graph.py).
     :return: torch.FloatTensor of shape [num_nodes, feat_dim]
     """
-    folder = join("data", "pregnancy_MiniLM_L6")
+    folder = constants.PREGNANCY_DIR
     train_emb = np.load(join(folder, "train_embeddings.npy"))
     test_emb = np.load(join(folder, "test_embeddings.npy"))
     return torch.tensor(np.vstack([train_emb, test_emb]), dtype=torch.float)
@@ -151,6 +217,32 @@ def normalize_features(features, fit_mask, mode):
         std = features[fit_mask].std(dim=0, keepdim=True).clamp(min=1e-6)
         return (features - mean) / std
     raise ValueError(f"Unknown feature_norm: {mode}")
+
+
+def build_node_input(features, split, hps, n_nodes):
+    """
+    Build what the GNN reads at its input layer, per constants.NODE_INPUT.
+    :param features: the node embeddings; only read when NODE_INPUT is "feat".
+    :return: (x, module, in_dim). Exactly one of x (a fixed tensor) and module
+             (an nn.Embedding whose weight is the input) is not None.
+    """
+    node_input = constants.NODE_INPUT
+    if node_input == "feat":
+        x = normalize_features(features, split == 0, hps["feature_norm"])
+        return x, None, x.size(1)
+    if node_input == "const":
+        return torch.ones(n_nodes, 1), None, 1
+    dim = hps["node_input_dim"]
+    if node_input == "random":
+        # Fixed across trials and seeds, so the arm is one model, not a lottery.
+        gen = torch.Generator().manual_seed(NODE_INPUT_SEED)
+        x = torch.randn(n_nodes, dim, generator=gen)
+        return F.normalize(x, p=2, dim=1), None, dim
+    if node_input == "learned":
+        emb = nn.Embedding(n_nodes, dim)
+        nn.init.normal_(emb.weight, std=0.1)
+        return None, emb, dim
+    raise ValueError(f"Unknown node input: {node_input}")
 
 
 def scatter_mean_by_color(node_embeddings, color_indices, n_colors):
@@ -214,10 +306,11 @@ def train(variant, n_colors, data, hps, features=None, epochs=EPOCHS, seed=SEED)
     relational = variant in RELATIONAL_VARIANTS
 
     if variant in FEATURE_VARIANTS:
-        feat = normalize_features(features, split == 0, hps["feature_norm"])
-        feat_dim = feat.size(1)
+        feat, feat_module, feat_dim = build_node_input(features, split, hps, color_indices.size(0))
+        if feat_module is not None:
+            modules["node_input"] = feat_module
     else:
-        feat = None
+        feat, feat_module = None, None
 
     if variant in ("attention", "pool", "feat_color"):
         modules["color_embedding"] = ColorEmbedding(n_colors=n_colors, embedding_dim=hps["color_embedding_dim"])
@@ -285,14 +378,18 @@ def train(variant, n_colors, data, hps, features=None, epochs=EPOCHS, seed=SEED)
     params = [p for m in modules.values() for p in m.parameters()]
     optimizer = torch.optim.AdamW(params, lr=LR, weight_decay=hps["weight_decay"])
 
+    def node_x():
+        """The GNN input: a fixed tensor, or the trainable table when learned."""
+        return feat if feat_module is None else modules["node_input"].weight
+
     def forward():
         # Build the node input
         if variant in ("attention", "pool"):
             x = modules["color_embedding"](color_indices)
         elif variant == "feat_color":
-            x = torch.cat([feat, modules["color_embedding"](color_indices)], dim=1)
+            x = torch.cat([node_x(), modules["color_embedding"](color_indices)], dim=1)
         else:
-            x = feat
+            x = node_x()
 
         # GNN
         if relational:
@@ -400,7 +497,14 @@ def sample_hps(trial, variant, models, k_range, wide=False):
     if variant in ("attention", "pool", "feat_color"):
         hps["color_embedding_dim"] = trial.suggest_categorical("color_embedding_dim", [12, 16, 20, 24])
     if variant in FEATURE_VARIANTS:
-        hps["feature_norm"] = trial.suggest_categorical("feature_norm", ["none", "l2", "standardize"])
+        if constants.NODE_INPUT == "feat":
+            hps["feature_norm"] = trial.suggest_categorical("feature_norm", ["none", "l2", "standardize"])
+        else:
+            # Recorded so the arm is visible in the logged hps. "feat" is left
+            # out on purpose, so the existing hp_results.json caches still match.
+            hps["node_input"] = constants.NODE_INPUT
+            if constants.NODE_INPUT in ("random", "learned"):
+                hps["node_input_dim"] = trial.suggest_categorical("node_input_dim", [32, 64, 128])
     if variant == "attention":
         hps["attention_hidden_dims"] = trial.suggest_categorical("attention_hidden_dims", [4, 6, 8])
         hps["attention_dropout_rate"] = trial.suggest_categorical("attention_dropout_rate", [0.0, 0.1, 0.2])
@@ -417,7 +521,7 @@ def sample_hps(trial, variant, models, k_range, wide=False):
 
 
 def run_study(dataset, variant, trials, k_range, models, diseases, epochs=EPOCHS, wide=False):
-    results_dir = join("results", "exp08", dataset, variant + ("_wide" if wide else ""))
+    results_dir = join("results", "exp08", results_tag(dataset), variant + ("_wide" if wide else ""))
     os.makedirs(results_dir, exist_ok=True)
     csv_path = join(results_dir, "trial_results.csv")
     hp_path = join(results_dir, "hp_results.json")
@@ -440,7 +544,7 @@ def run_study(dataset, variant, trials, k_range, models, diseases, epochs=EPOCHS
             n_colors = len(labels)
             test_colors = color_indices[split == 1].unique()
             datasets[name][k] = (edge_index, color_indices, labels, test_colors, split, n_colors)
-        if variant in FEATURE_VARIANTS:
+        if variant in FEATURE_VARIANTS and constants.NODE_INPUT == "feat":
             if dataset == "diseases":
                 features[name] = load_disease_node_features(name)
             else:
@@ -508,8 +612,13 @@ def run_study(dataset, variant, trials, k_range, models, diseases, epochs=EPOCHS
 def main():
     parser = argparse.ArgumentParser(description="Run color-classification variant experiments.")
     parser.add_argument("--variant", required=True, choices=VARIANTS)
-    parser.add_argument("--dataset", type=str, default="diseases", choices=["diseases", "pregnancy"])
+    parser.add_argument("--dataset", type=str, default="diseases",
+                        help="diseases, pregnancy, or another data/ folder with the pregnancy "
+                             "layout (e.g. pregnancy_C for the anti-collapse embeddings)")
     parser.add_argument("--trials", type=int, default=100)
+    parser.add_argument("--node-input", type=str, default="feat", choices=NODE_INPUTS,
+                        help="What the GNN reads at its input layer. Anything but 'feat' drops the "
+                             "embeddings from the input and writes to results/exp08/<dataset>-<node input>/")
     parser.add_argument("--k", type=int, nargs="+", default=[20])
     parser.add_argument("--models", type=str, default="GIN",
                         help="Comma-separated GNN types for non-relational variants (GCN,GAT,GIN,SAGE)")
@@ -521,12 +630,14 @@ def main():
                         help="Quick sanity run: 1 disease, 1 trial, few epochs")
     args = parser.parse_args()
 
+    dataset = resolve_dataset(args.dataset)
+    resolve_node_input(args.node_input)
     models = args.models.split(",")
     if args.smoke:
-        run_study(args.dataset, args.variant, trials=1, k_range=args.k, models=models,
+        run_study(dataset, args.variant, trials=1, k_range=args.k, models=models,
                   diseases=args.diseases[:1], epochs=15, wide=args.wide)
     else:
-        run_study(args.dataset, args.variant, trials=args.trials, k_range=args.k, models=models,
+        run_study(dataset, args.variant, trials=args.trials, k_range=args.k, models=models,
                   diseases=args.diseases, wide=args.wide)
 
 

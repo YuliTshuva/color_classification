@@ -94,6 +94,7 @@ def run_jobs(jobs):
 def study_jobs(args):
     return [(f"exp09_{b}_{r}",
              [sys.executable, "train09.py", "--readout", r, "--backbone", b,
+              "--node-input", args.node_input,
               "--dataset", args.dataset, "--trials", str(args.trials),
               "--epochs", str(args.epochs)])
             for b in args.backbones for r in args.readouts]
@@ -102,6 +103,7 @@ def study_jobs(args):
 def seed_jobs(args):
     return [(f"exp09_{b}_{r}_seeds",
              [sys.executable, "train09.py", "--readout", r, "--backbone", b,
+              "--node-input", args.node_input,
               "--dataset", args.dataset, "--seed-eval", "--seeds", str(args.seeds),
               "--epochs", str(args.epochs)])
             for b in args.backbones for r in args.readouts]
@@ -259,12 +261,24 @@ def report(dataset, backbones, readouts):
     print(f"\nWritten: {join(out_dir, 'summary.md')}, summary.tex, summary.csv")
 
 
+def results_tag(dataset, node_input):
+    """Mirrors train08.results_tag, without importing torch into the driver."""
+    return dataset if node_input == "feat" else f"{dataset}-{node_input}"
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run and report the exp09 learned-pooling comparison.")
-    parser.add_argument("--dataset", type=str, default="pregnancy", choices=["pregnancy", "diseases"])
+    parser.add_argument("--dataset", type=str, default="pregnancy",
+                        help="diseases, pregnancy, or another data/ folder with the pregnancy "
+                             "layout (e.g. pregnancy_C for the anti-collapse embeddings)")
     parser.add_argument("--backbones", type=str, nargs="+", default=["rgat"], choices=["rgat", "rgcn"])
     parser.add_argument("--readouts", type=str, nargs="+", default=READOUTS, choices=READOUTS)
     parser.add_argument("--trials", type=int, default=60, help="Optuna trials per readout")
+    parser.add_argument("--node-input", type=str, default="feat",
+                        choices=["feat", "const", "random", "learned"],
+                        help="What the GNN reads at its input layer, passed through to train09.py. "
+                             "Anything but 'feat' drops the embeddings from the input (the graph "
+                             "is still built from them) and writes to results/exp09/<dataset>-<node input>/")
     parser.add_argument("--seeds", type=int, default=5, help="Seeds per best configuration")
     parser.add_argument("--epochs", type=int, default=10000,
                         help="Epoch cap passed to train09.py. The default relies on early stopping.")
@@ -286,7 +300,7 @@ def main():
 
     if args.stage in ("all", "report"):
         print("\n=== Stage 3/3: report ===")
-        report(args.dataset, args.backbones, args.readouts)
+        report(results_tag(args.dataset, args.node_input), args.backbones, args.readouts)
 
     if failed:
         print(f"\nFailed jobs: {failed} - check logs/<name>.log and rerun.")

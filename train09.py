@@ -33,6 +33,13 @@ Usage (server), one process per readout:
   python train09.py --readout pma             --trials 60
   python train09.py --readout gated_attn --smoke          # quick sanity run
 
+Featureless ablation (--node-input, see NODE_INPUTS): drops the embeddings from
+the GNN input while leaving the kNN graph - which is still built from them -
+alone. Asks how much of the score was the features and how much was the graph.
+Those runs write to results/exp09/<dataset>-<node input>/, so nothing already
+reported is touched:
+  python train09.py --readout mean --node-input learned
+
 Error bars, after the studies are done:
   python train09.py --readout gated_attn --seed-eval --seeds 5
 
@@ -45,8 +52,10 @@ Results:
 # Imports
 from models import *
 from utils import load_pregnancy_data, load_disease_data
-from train08 import (DISEASES, EPOCHS, LR, TOLERANCE, SEED, set_seed, normalize_features,
-                     build_same_color_edges, load_pregnancy_node_features, load_disease_node_features)
+from train08 import (DISEASES, EPOCHS, LR, TOLERANCE, SEED, NODE_INPUTS, set_seed, normalize_features,
+                     build_same_color_edges, load_pregnancy_node_features, load_disease_node_features,
+                     resolve_dataset, resolve_node_input, results_tag, build_node_input)
+import constants
 from sklearn.metrics import roc_auc_score
 import argparse
 import csv
@@ -125,8 +134,7 @@ def train(readout, backbone, n_colors, data, hps, features, epochs=EPOCHS, seed=
     test_mask = torch.isin(color_indices, test_colors)
 
     # --- Inputs
-    feat = normalize_features(features, split == 0, hps["feature_norm"])
-    feat_dim = feat.size(1)
+    feat, feat_module, feat_dim = build_node_input(features, split, hps, color_indices.size(0))
 
     # --- Relational graph. Relation 0: kNN edges, relation 1: same-color edges.
     # The RGCN/RGAT layers symmetrize internally (directed=False), so each pair
@@ -151,13 +159,6 @@ def train(readout, backbone, n_colors, data, hps, features, epochs=EPOCHS, seed=
         rel_types.append(torch.full((supernode_edges.size(1),), num_relations, dtype=torch.long))
         num_relations += 1
 
-        # Input features of the virtual nodes
-        if hps["supernode_init"] == "mean":
-            super_feat = scatter_mean(feat, color_indices, n_colors)
-        else:
-            super_feat = torch.zeros(n_colors, feat_dim)
-        feat = torch.cat([feat, super_feat], dim=0)
-
     rel_edge_index = torch.cat(rel_edges, dim=1)
     rel_edge_type = torch.cat(rel_types)
 
@@ -167,6 +168,8 @@ def train(readout, backbone, n_colors, data, hps, features, epochs=EPOCHS, seed=
 
     # --- Modules
     modules = {}
+    if feat_module is not None:
+        modules["node_input"] = feat_module
     if backbone == "rgcn":
         modules["gnn"] = RGCN(in_dim=feat_dim, hidden_dim=hps["gnn_hidden_dim"],
                               out_dim=hps["gnn_embedding_dim"], num_relations=num_relations,
@@ -192,7 +195,8 @@ def train(readout, backbone, n_colors, data, hps, features, epochs=EPOCHS, seed=
     for m in modules.values():
         m.to(DEVICE)
         m.train()
-    feat = feat.to(DEVICE)
+    if feat is not None:
+        feat = feat.to(DEVICE)
     rel_edge_index, rel_edge_type = rel_edge_index.to(DEVICE), rel_edge_type.to(DEVICE)
     if pair_edge_index is not None:
         pair_edge_index = pair_edge_index.to(DEVICE)
@@ -213,8 +217,23 @@ def train(readout, backbone, n_colors, data, hps, features, epochs=EPOCHS, seed=
             return F.binary_cross_entropy(out[colors].clamp(1e-6, 1 - 1e-6), color_labels[colors])
         return classification_loss(out[colors], color_labels[colors])
 
+    def node_x():
+        """
+        The GNN input: a fixed tensor, or the trainable table when learned. The
+        supernode rows are appended here rather than once up front, because with
+        a learned input the member embeddings change every step.
+        """
+        x = feat if feat_module is None else modules["node_input"].weight
+        if not supernode:
+            return x
+        if hps["supernode_init"] == "mean":
+            sup = scatter_mean(x, color_indices, n_colors)
+        else:
+            sup = torch.zeros(n_colors, x.size(1), device=x.device)
+        return torch.cat([x, sup], dim=0)
+
     def forward():
-        h = modules["gnn"](feat, rel_edge_index, rel_edge_type)
+        h = modules["gnn"](node_x(), rel_edge_index, rel_edge_type)
 
         # With supernodes the tail rows of h are the virtual nodes; the node task
         # only ever sees the real ones.
@@ -301,11 +320,18 @@ def sample_hps(trial, readout, backbone, k_range):
         "gnn_mlp_hidden_dims": trial.suggest_categorical("gnn_mlp_hidden_dims", [50, 64, 80]),
         "mlp_dropout_rate": trial.suggest_categorical("mlp_dropout_rate", [0.0, 0.1, 0.2]),
         "weight_decay": trial.suggest_categorical("weight_decay", [0.0, 1e-5, 1e-4, 1e-3, 1e-2]),
-        "feature_norm": trial.suggest_categorical("feature_norm", ["none", "l2", "standardize"]),
         "k": trial.suggest_categorical("k", k_range),
         "readout": readout,
         "backbone": backbone,
     }
+    if constants.NODE_INPUT == "feat":
+        hps["feature_norm"] = trial.suggest_categorical("feature_norm", ["none", "l2", "standardize"])
+    else:
+        # Recorded so the arm is visible in the logged hps. "feat" is left out on
+        # purpose, so the existing hp_results.json caches still match.
+        hps["node_input"] = constants.NODE_INPUT
+        if constants.NODE_INPUT in ("random", "learned"):
+            hps["node_input_dim"] = trial.suggest_categorical("node_input_dim", [32, 64, 128])
     if backbone == "rgat":
         hps["num_heads"] = trial.suggest_categorical("num_heads", [2, 4])
     if readout != "node_score_mean":
@@ -358,7 +384,7 @@ def append_row(csv_path, row):
 
 
 def results_dir_of(dataset, backbone, readout):
-    return join("results", "exp09", dataset, f"{backbone}_{readout}")
+    return join("results", "exp09", results_tag(dataset), f"{backbone}_{readout}")
 
 
 def run_study(dataset, readout, backbone, trials, k_range, diseases, epochs=EPOCHS):
@@ -435,7 +461,7 @@ def best_hps_of(dataset, backbone, readout):
 
 def run_seed_eval(dataset, readout, backbone, seeds, diseases, epochs=EPOCHS):
     """Retrain the study's best config over several seeds, for error bars."""
-    csv_path = join("results", "exp09", dataset, "seed_results.csv")
+    csv_path = join("results", "exp09", results_tag(dataset), "seed_results.csv")
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
     hps = best_hps_of(dataset, backbone, readout)
@@ -469,8 +495,13 @@ def main():
     parser = argparse.ArgumentParser(description="Run the learned-pooling (Channel 1) experiments.")
     parser.add_argument("--readout", required=True, choices=READOUTS)
     parser.add_argument("--backbone", type=str, default="rgat", choices=BACKBONES)
-    parser.add_argument("--dataset", type=str, default="pregnancy", choices=["diseases", "pregnancy"])
+    parser.add_argument("--dataset", type=str, default="pregnancy",
+                        help="diseases, pregnancy, or another data/ folder with the pregnancy "
+                             "layout (e.g. pregnancy_C for the anti-collapse embeddings)")
     parser.add_argument("--trials", type=int, default=60)
+    parser.add_argument("--node-input", type=str, default="feat", choices=NODE_INPUTS,
+                        help="What the GNN reads at its input layer. Anything but 'feat' drops the "
+                             "embeddings from the input and writes to results/exp09/<dataset>-<node input>/")
     parser.add_argument("--k", type=int, nargs="+", default=[20])
     parser.add_argument("--diseases", type=str, nargs="+", default=DISEASES)
     parser.add_argument("--seed-eval", action="store_true",
@@ -482,14 +513,16 @@ def main():
                         help="Quick sanity run: 1 dataset, 1 trial, few epochs")
     args = parser.parse_args()
 
+    dataset = resolve_dataset(args.dataset)
+    resolve_node_input(args.node_input)
     if args.seed_eval:
-        run_seed_eval(args.dataset, args.readout, args.backbone, args.seeds, args.diseases,
+        run_seed_eval(dataset, args.readout, args.backbone, args.seeds, args.diseases,
                       epochs=args.epochs)
     elif args.smoke:
-        run_study(args.dataset, args.readout, args.backbone, trials=1, k_range=args.k,
+        run_study(dataset, args.readout, args.backbone, trials=1, k_range=args.k,
                   diseases=args.diseases[:1], epochs=15)
     else:
-        run_study(args.dataset, args.readout, args.backbone, trials=args.trials, k_range=args.k,
+        run_study(dataset, args.readout, args.backbone, trials=args.trials, k_range=args.k,
                   diseases=args.diseases, epochs=args.epochs)
 
 

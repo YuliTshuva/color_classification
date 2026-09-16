@@ -1,0 +1,225 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{times}
+
+\title{New Embeddings That Fixed the Wrong Problem:\\ Experiments 08, 09 and 10 Rerun}
+\author{}
+\date{August 15, 2026 \quad (extended September 7, 2026)}
+
+\begin{document}
+\maketitle
+
+\section*{The problem we started from}
+
+Report 03 ended with one measurement: all the patient embeddings looked almost identical to
+each other. Two random patients had a similarity of $.979$ out of $1$, so the ``20 nearest
+neighbours'' in the graph were chosen by differences in the fourth decimal place.
+
+The lab proposed a set of new encoders to fix this. This report describes them and what
+happened when experiments 08, 09 and 10 were run again on top of them.
+
+\section*{The new embeddings}
+
+The old encoder was trained on one thing only: predict the label. Nothing stopped it from
+throwing away every direction in the embedding except the one that helps with that prediction,
+and that is what it did. The new recipes add a second term to the training objective that
+pushes back: each of the 64 numbers in an embedding must keep some spread, and different
+numbers must not repeat each other.
+
+Five versions were trained. Each is scored two ways: how similar two random patients look
+(lower is better spread), and how well the embeddings predict the label on their own, before
+any graph is involved.
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{lXcc}
+\toprule
+Version & What it does & Similarity & AUROC \\
+\midrule
+A & The old recipe, reproduced & $.981$ & $.798$ \\
+B & A bigger encoder, same objective & $.890$ & $.769$ \\
+C & Old encoder $+$ the anti-collapse term & $\mathbf{.633}$ & $\mathbf{.788}$ \\
+D & Bigger encoder $+$ the anti-collapse term & $.356$ & $.742$ \\
+E & Uses the patient's real visit sequence $+$ the term & $.338$ & $.710$ \\
+\bottomrule
+\end{tabularx}
+\caption{The five encoders, one run each. Similarity is between two random patients.}
+\end{table}
+
+There is a clear trade: the more the embeddings are forced to spread out, the worse they
+predict the label. Version C is the compromise --- it removes most of the crowding while
+giving up only $.010$ of prediction quality --- so C is the one taken forward.
+
+The fix works on its own terms. Random patients moved from $.979$ to $.633$, and the
+similarities among the neighbour candidates, which is what actually decides the graph, went
+from a range of $.009$ to a range of $.080$. The neighbours are now chosen by real
+differences instead of rounding noise.
+
+\section*{Experiment 08 again}
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{Xcc}
+\toprule
+Model & Old embeddings & Version C \\
+\midrule
+rgat & $\mathbf{.800}$ & $.773$ \\
+rgcn & $.784$ & $.768$ \\
+\bottomrule
+\end{tabularx}
+\caption{Test AUC on the color task. Best setting chosen on validation, one run each.}
+\end{table}
+
+\paragraph{Everything got worse.} Both models lost between $.016$ and $.027$. Repeated runs of
+the same setting differ by about $.004$--$.009$, so these drops are three to seven times
+larger than the normal noise.
+
+\paragraph{It is not bad luck in the tuning.} The whole set of tried settings moved down, not
+just the best one: the middle setting went from $.783$ to $.770$. Validation scores dropped
+by the same amount.
+
+\paragraph{It is missing information, not overfitting.} The score on the \emph{training} data
+fell as well, from $.866$ to $.803$. The model is not memorising more and generalising less;
+there is simply less to work with.
+
+\section*{Experiment 09 again}
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{Xcc}
+\toprule
+Readout & Old embeddings & Version C \\
+\midrule
+\texttt{supernode} & $.795 \pm .009$ & $\mathbf{.780 \pm .008}$ \\
+\texttt{pma} & $.795 \pm .004$ & $.776 \pm .007$ \\
+\texttt{gated\_attn} & $.796 \pm .005$ & $.773 \pm .004$ \\
+\texttt{node\_score\_mean} & $.796 \pm .002$ & $.772 \pm .004$ \\
+\texttt{mean} (the old method) & $\mathbf{.798 \pm .004}$ & $.769 \pm .010$ \\
+\texttt{multistat} & $.792 \pm .007$ & $.768 \pm .010$ \\
+\bottomrule
+\end{tabularx}
+\caption{Test AUC on the color task, 5 runs each.}
+\end{table}
+
+\paragraph{The order changed.} On the old embeddings nothing beat the plain average and the
+six numbers were indistinguishable. On the new ones the plain average drops to fifth place,
+and \texttt{supernode} --- an extra node per patient group that gathers the information --- is
+now $.011$ ahead of it. On the per-visit task the same gap is $.022$.
+
+\paragraph{But this is a shuffle inside a lower range.} The best readout on the new embeddings
+$(.780)$ is still below the \emph{worst} readout on the old ones $(.792)$.
+
+\section*{Experiment 10 again}
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{Xcc}
+\toprule
+Graph & Old embeddings & Version C \\
+\midrule
+Flexible & $\mathbf{.800 \pm .003}$ & $\mathbf{.780 \pm .005}$ \\
+20 neighbours (the old graph) & $.796 \pm .002$ & $.767 \pm .004$ \\
+\bottomrule
+\end{tabularx}
+\caption{Test AUC on the color task, rgat, 5 runs each.}
+\end{table}
+
+\paragraph{The flexible graph finally does something.} On the old embeddings it was $.004$
+ahead of the fixed graph, small enough to be explained by the extra tuning it received. On the
+new embeddings the gap is $.013$, about three times the run-to-run noise.
+
+\paragraph{And it now prefers the opposite settings.} On the old embeddings the winner was a
+dense graph (63 connections per patient) built on the untouched similarities. On the new ones
+the winner is a sparse graph (12 connections) built on whitened similarities, and whitening is
+now the best of the three ways of measuring similarity ($.794$, against $.780$ untouched and
+$.770$ centred). The choice of similarity measure used to make no difference at all.
+
+\paragraph{The gain does not close the gap.} The best result on the new embeddings is
+$.780 \pm .005$, against $.800 \pm .003$ on the old ones.
+
+\section*{What happens with no embeddings at all}
+
+Experiments 08, 09 and 10 were run once more with the embeddings taken out of the model's
+input. The graph was still built from them, so the same visits were still neighbours. Only the
+vector each visit starts from changed. Four starting vectors were compared. This ran on the old
+embeddings, so the number to compare with is $.800$.
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{Xlcc}
+\toprule
+What each visit starts from & Visits start & Test AUC & On training data \\
+\midrule
+Its embedding: the 64 numbers the encoder
+made from its text (every result above) & different, by text & $\mathbf{.800}$ & $.851$ \\
+A random vector, drawn once before training
+and never changed & different, by noise & $.702$ & $.831$ \\
+A vector of its own that the model is free
+to change while it trains & different, by noise & $.701$ & $1.000$ \\
+One single vector, shared by every visit
+in the dataset & identical & $.499$ & $.504$ \\
+\bottomrule
+\end{tabularx}
+\caption{Experiment 08 rerun with the embeddings removed from the input. All four rows use the
+same graph, so in all four the same visits are neighbours; only the starting vectors differ.
+Test AUC on the color task, rgat, best setting chosen on validation, one run each. Chance is
+$.500$.}
+\end{table}
+
+\paragraph{Without the embeddings the score falls from $.800$ to $.70$.} Chance is $.500$.
+
+\paragraph{A trained vector and a random one score the same} --- $.701$ and $.702$. The trained
+one scores a perfect $1.000$ on the training data, so it is memorising the visits it has seen.
+
+\paragraph{One shared vector scores chance.} Every layer of the network averages over
+neighbours, so visits that start the same stay the same.
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{Xcc}
+\toprule
+ & With embeddings & Without \\
+\midrule
+Exp.\ 09: best of the six readouts & $.798 \pm .004$ (\texttt{mean}) & $.679 \pm .029$ (\texttt{pma}) \\
+Exp.\ 09: worst of the six & $.792 \pm .007$ (\texttt{multistat}) & $.622 \pm .017$ (\texttt{supernode}) \\
+\addlinespace
+Exp.\ 10: flexible graph & $.800 \pm .003$ & $.705 \pm .020$ \\
+Exp.\ 10: fixed graph, 20 neighbours each & $.796 \pm .002$ & $.670 \pm .029$ \\
+\bottomrule
+\end{tabularx}
+\caption{The left column repeats tables 3 and 4; the right column is the same experiment with
+the embeddings taken out of the input, using the trained vector from row 3 of table 5. The two
+top rows are the best and the worst of the six readouts of experiment 09 --- which readout that
+is differs between the columns, so each one is named. The two bottom rows are the two graphs of
+experiment 10. What the text is about is the size of the gap between the rows of a pair, not the
+rows themselves. Test AUC on the color task, rgat, 5 runs each.}
+\end{table}
+
+\paragraph{The choice of readout starts to matter.} The six readouts spread over $.057$ without
+the embeddings, against $.006$ with them.
+
+\paragraph{So does the choice of graph.} The flexible graph beats the fixed one by $.035$
+without the embeddings, against $.004$ with them.
+
+\paragraph{The winning graph is the same kind as before} --- dense, $55$ connections per
+patient, built on the untouched similarities.
+
+\section*{What this adds up to}
+
+\paragraph{The crowding was not the bottleneck.} It was a real defect and it has been fixed,
+but fixing it made every downstream number worse. The one direction the old encoder had
+concentrated on was carrying the signal; spreading the embeddings out spent it.
+
+\paragraph{The graph and the readout do respond now.} Both parts of the pipeline that looked
+dead in report 03 came back to life on the new embeddings: the flexible graph, the choice of
+similarity measure, and the choice of readout all matter where none of them did before. This
+says those components were never broken --- they had nothing to work with.
+
+\paragraph{The two effects do not cancel out.} The parts we can tune gained about $.013$; the
+encoder change cost about $.030$. The best model overall is still the old one, at
+$.800 \pm .003$.
+
+\end{document}
