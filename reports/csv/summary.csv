@@ -1,0 +1,7 @@
+dataset,nodes,edges,avg_degree,density,components,largest_component,largest_component_pct,isolated_nodes,embedding_seconds,edge_seconds,embedding_peak_ram_mb,edge_peak_ram_mb,disk_mb,edge_rule
+"pregnancy (ours, k=20)",61046,972557,31.8631,0.000521961,1,61046,100,0,,,,,,kNN k=20
+em_user,57333,4573417,159.539,0.00278272,1,57333,100,0,0,16.14,0,314,70.2,"given by SubGNN, not rebuilt (no text)"
+jodie_reddit,672447,10459299,31.1082,4.62612e-05,81,665409,98.9534,0,5.78,131.62,4930,6051.3,649,"kNN k=20 on cosine, undirected, deduplicated"
+jodie_wikipedia,157474,2701464,34.31,0.000217878,18,156198,99.1897,0,1.26,59.51,1817.6,2046,157,"kNN k=20 on cosine, undirected, deduplicated"
+synthea_1k,67331,1141059,33.894,0.000503401,129,51533,76.5368,0,461.39,22.34,1511.4,1466.6,129.3,"kNN k=20 on cosine, undirected, deduplicated"
+synthea_5k,325760,5824209,35.7577,0.000109767,412,229766,70.5323,0,1979.09,192.25,3419.1,4566.6,631.1,"kNN k=20 on cosine, undirected, deduplicated"

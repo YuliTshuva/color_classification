@@ -1,0 +1,22 @@
+{
+    "dataset": "hpo_metab",
+    "backbone": "rgcn",
+    "readout": "extra_node",
+    "node_input": "learned",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 52.43,
+    "test_std": 4.34,
+    "val_mean": 56.23,
+    "val_std": 1.03,
+    "n_seeds": 10,
+    "n_trials": 6,
+    "mean_seconds_per_run": 68.2,
+    "n_nodes": 14587,
+    "n_graph_edges": 3238174,
+    "n_same_subgraph_edges": 138208,
+    "n_subgraphs": 2400,
+    "n_classes": 6,
+    "multilabel": false,
+    "hps": "{\"backbone\": \"rgcn\", \"readout\": \"extra_node\", \"lr\": 0.01, \"gnn_embedding_dim\": 156, \"gnn_hidden_dim\": 128, \"k_gnn_layers\": 1, \"gnn_dropout_rate\": 0.0, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 0.0, \"node_input\": \"learned\", \"node_input_dim\": 128, \"color_mlp_hidden_dims\": 50, \"supernode_init\": \"zeros\"}",
+    "by_variant": "[{\"backbone\": \"rgcn\", \"readout\": \"extra_node\", \"max\": 0.5738, \"count\": 6}]"
+}

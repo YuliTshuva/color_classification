@@ -1,0 +1,5 @@
+dataset,nodes,edge_lines,edges_undirected,subgraphs,avg_size,classes,multi_label
+ppi_bp,21521,342316,338625,1591,10.2049,6,False
+hpo_neuro,14587,3238174,3238174,4000,14.8402,10,True
+hpo_metab,14587,3238174,3238174,2400,14.4358,6,False
+em_user,57333,4573417,4573417,324,155.417,2,False

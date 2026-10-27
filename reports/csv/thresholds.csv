@@ -1,0 +1,17 @@
+dataset,k,edges,avg_degree
+jodie_reddit,5,2617905,7.7862
+jodie_reddit,10,5225598,15.542
+jodie_reddit,20,10459299,31.1082
+jodie_reddit,40,20956134,62.328
+jodie_wikipedia,5,687065,8.72608
+jodie_wikipedia,10,1362492,17.3043
+jodie_wikipedia,20,2701464,34.31
+jodie_wikipedia,40,5348207,67.925
+synthea_1k,5,299930,8.90912
+synthea_1k,10,585867,17.4026
+synthea_1k,20,1141059,33.894
+synthea_1k,40,2210412,65.6581
+synthea_5k,5,1497984,9.19686
+synthea_5k,10,2958600,18.1643
+synthea_5k,20,5824209,35.7577
+synthea_5k,40,11424283,70.1393

@@ -1,0 +1,22 @@
+{
+    "dataset": "coreness",
+    "backbone": "rgat",
+    "readout": "hub_graph",
+    "node_input": "struct",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 78.69,
+    "test_std": 3.05,
+    "val_mean": 91.82,
+    "val_std": 1.82,
+    "n_seeds": 10,
+    "n_trials": 6,
+    "mean_seconds_per_run": 5.6,
+    "n_nodes": 5000,
+    "n_graph_edges": 119205,
+    "n_same_subgraph_edges": 41990,
+    "n_subgraphs": 221,
+    "n_classes": 3,
+    "multilabel": false,
+    "hps": "{\"backbone\": \"rgat\", \"readout\": \"hub_graph\", \"lr\": 0.001, \"gnn_embedding_dim\": 100, \"gnn_hidden_dim\": 100, \"k_gnn_layers\": 1, \"gnn_dropout_rate\": 0.2, \"gnn_mlp_hidden_dims\": 50, \"mlp_dropout_rate\": 0.0, \"weight_decay\": 0.0, \"node_input\": \"struct\", \"num_heads\": 4, \"color_mlp_hidden_dims\": 64, \"hub_top_k\": 10, \"supernode_init\": \"zeros\"}",
+    "by_variant": "[{\"backbone\": \"rgat\", \"readout\": \"hub_graph\", \"max\": 0.9545, \"count\": 6}]"
+}

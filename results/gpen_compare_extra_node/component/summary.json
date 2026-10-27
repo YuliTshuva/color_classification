@@ -1,0 +1,22 @@
+{
+    "dataset": "component",
+    "backbone": "rgat",
+    "readout": "extra_node",
+    "node_input": "struct",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 67.2,
+    "test_std": 8.54,
+    "val_mean": 78.8,
+    "val_std": 8.21,
+    "n_seeds": 10,
+    "n_trials": 6,
+    "mean_seconds_per_run": 3.5,
+    "n_nodes": 17260,
+    "n_graph_edges": 91619,
+    "n_same_subgraph_edges": 877470,
+    "n_subgraphs": 250,
+    "n_classes": 2,
+    "multilabel": false,
+    "hps": "{\"backbone\": \"rgat\", \"readout\": \"extra_node\", \"lr\": 0.01, \"gnn_embedding_dim\": 100, \"gnn_hidden_dim\": 100, \"k_gnn_layers\": 2, \"gnn_dropout_rate\": 0.2, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 0.0001, \"node_input\": \"struct\", \"num_heads\": 4, \"color_mlp_hidden_dims\": 32, \"supernode_init\": \"zeros\"}",
+    "by_variant": "[{\"backbone\": \"rgat\", \"readout\": \"extra_node\", \"max\": 0.88, \"count\": 6}]"
+}

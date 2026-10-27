@@ -1,0 +1,260 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{times}
+\usepackage{enumitem}
+\usepackage{float}
+\setlist[description]{leftmargin=2.2cm, labelwidth=2.0cm, itemsep=2pt, font=\normalfont\itshape}
+
+\title{The Standard Subgraph Classification Datasets:\\ Four Real and Four Synthetic}
+\author{}
+\date{October 13, 2026}
+
+\begin{document}
+\maketitle
+
+\section*{What these datasets are}
+
+Subgraph classification has a standard test set. It came with SubGNN (Alsentzer et al.,
+NeurIPS 2020), and almost every later method reports on it: GLASS (2022), S2N (2024), SSNP
+(2023) and GPEN (2025). It has four real datasets. In each one there is a single large graph,
+a list of subgraphs inside it, and one label per subgraph. SubGNN also made four synthetic
+datasets: Density, Cut-Ratio, Coreness and Component. They have their own section below.
+
+All four real datasets are already on this PC, in \texttt{data/raw/subgnn}. SubGNN did not
+release the synthetic datasets, only code to make them. GLASS published the files it used,
+and we downloaded those into \texttt{data/raw/subgnn\_synthetic}. Every number below was
+measured from these files, unless it says it comes from a paper.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.4cm}>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{2.1cm}}
+\toprule
+Dataset & Node & Subgraph (one color) & Label of the subgraph & Classes \\
+\midrule
+Pregnancy (ours) & a visit & a patient's visits & had the outcome & 2 \\
+\addlinespace
+PPI-BP & a protein & the proteins of one biological process & the kind of process & 6 \\
+HPO-Metab & a symptom or a gene & the symptoms of one rare disease & the kind of metabolic disease & 6 \\
+HPO-Neuro & a symptom or a gene & the symptoms of one rare disease & the kinds of neurological disease & 10, several each \\
+EM-User & a workout & a user's workouts & the user's gender & 2 \\
+\bottomrule
+\end{tabularx}
+\caption{How each dataset is split into subgraphs and what each subgraph is labelled with.}
+\end{table}
+
+\section*{Each dataset}
+
+\begin{description}
+\item[PPI-BP] Human proteins, with an edge when two proteins are known to interact. A
+subgraph is the set of proteins that take part in one biological process, taken from the
+Gene Ontology gene sets. The label is the broad group of that process: metabolism,
+development, signal transduction, stress and death, cell organization, or transport.
+\item[HPO-Metab] A knowledge graph of symptoms (from the Human Phenotype Ontology) and genes.
+A subgraph is the list of symptoms of one rare disease. The label is one of six kinds of
+metabolic disease, for example lipid or lysosomal. Each class has exactly 400 subgraphs.
+\item[HPO-Neuro] The same graph as HPO-Metab, with neurological diseases instead. A disease
+can be in more than one of the ten classes, so the label is a set of classes.
+\item[EM-User] Workouts from the fitness app Endomondo. A subgraph is the workouts of one
+user, and the label is the user's gender. It is the only binary dataset, and it is balanced:
+$162$ women and $162$ men.
+\end{description}
+
+\section*{Size}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrrrr}
+\toprule
+ & Nodes & Edges & Avg.\ degree & Subgraphs & Avg.\ size & Median & Smallest--largest \\
+\midrule
+Pregnancy (ours) & $61{,}046$ & $972{,}557$ & $31.9$ & $6{,}590$ & $9.3$ & $5$ & $2$--$221$ \\
+\addlinespace
+PPI-BP & $21{,}521$ & $338{,}625$ & $31.5$ & $1{,}591$ & $10.2$ & $7$ & $1$--$160$ \\
+HPO-Metab & $14{,}587$ & $3{,}238{,}174$ & $444.0$ & $2{,}400$ & $14.4$ & $13$ & $1$--$50$ \\
+HPO-Neuro & $14{,}587$ & $3{,}238{,}174$ & $444.0$ & $4{,}000$ & $14.8$ & $14$ & $2$--$55$ \\
+EM-User & $57{,}333$ & $4{,}573{,}417$ & $159.5$ & $324$ & $155.4$ & $134$ & $3$--$499$ \\
+\bottomrule
+\end{tabular}
+\caption{Size of the graphs and of the subgraphs. Size is the number of nodes in a subgraph.
+Edges are counted once, without self-loops.}
+\end{table}
+
+\section*{How the subgraphs sit in the graph}
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+ & Of all nodes, & Of nodes in a & Pieces per & One piece & Edges inside & Same-label \\
+ & in no subgraph & subgraph, in two+ & subgraph & & a subgraph & neighbours (chance) \\
+\midrule
+Pregnancy (ours) & $0\%$ & $0\%$ & $8.8$ of $9.3$ & -- & $0.4\%$ & $83.0\%$ ($81.7\%$) \\
+\addlinespace
+PPI-BP & $67.4\%$ & $47.8\%$ & $7.0$ of $10.2$ & $2.1\%$ & $2.3\%$ & $27.5\%$ ($19.4\%$) \\
+HPO-Metab & $82.5\%$ & $78.2\%$ & $1.6$ of $14.4$ & $54.8\%$ & $2.9\%$ & $21.8\%$ ($17.0\%$) \\
+HPO-Neuro & $76.3\%$ & $78.2\%$ & $1.5$ of $14.8$ & $59.3\%$ & $5.1\%$ & -- \\
+EM-User & $87.6\%$ & $68.0\%$ & $30.6$ of $155.4$ & $0\%$ & $1.1\%$ & $49.6\%$ ($50.0\%$) \\
+\bottomrule
+\end{tabular}
+\caption{The first two columns have different bases: the first is out of all nodes, the
+second only out of the nodes that are in some subgraph. \emph{Pieces}: take the nodes of one subgraph, keep only the edges between them, and count
+the separate groups that are left. A node with no edge to the rest of its subgraph is a
+piece on its own. So ``$7.0$ of $10.2$'' means an average subgraph of $10.2$ nodes splits
+into $7$ groups that do not touch each other. \emph{One piece} is the share of subgraphs that
+do not split at all. \emph{Edges inside a subgraph} is the share of all edges in the graph
+whose two ends are in the same subgraph. \emph{Same-label neighbours} looks at edges between two nodes of different subgraphs,
+using only nodes that belong to one subgraph, and asks how often both subgraphs have the same
+label; \emph{chance} is what random edges would give. It is left out for HPO-Neuro, where a
+subgraph has several labels.}
+\end{table}
+
+\paragraph{Most nodes belong to no subgraph.} Between $67\%$ and $88\%$ of the nodes are only
+background. In our data every visit belongs to a patient.
+
+\paragraph{Subgraphs share nodes.} About half of the PPI-BP proteins that are in a subgraph
+are in two or more, and about three quarters in HPO and EM-User. In our data a visit belongs
+to exactly one patient.
+
+\paragraph{PPI-BP and EM-User fall apart like ours.} A PPI-BP subgraph of $10.2$ proteins
+splits into $7.0$ pieces, and only $2\%$ are in one piece. An EM-User subgraph splits into
+$30.6$ pieces. The HPO subgraphs are mostly in one piece.
+
+\paragraph{Neighbours carry some label signal, except in EM-User.} In PPI-BP, neighbouring
+subgraphs share a label $27.5\%$ of the time, against $19.4\%$ by chance. In EM-User the two
+numbers are the same, as in our data.
+
+\paragraph{Size says little about the label.} In EM-User women and men have about the same
+number of workouts ($152$ and $158$). In PPI-BP, signal transduction subgraphs are the
+largest ($13.9$ proteins on average) and transport the smallest ($8.6$), so size helps a
+little. In HPO-Metab lysosomal diseases are the largest ($18.2$ against $11.1$ for
+carbohydrate).
+
+\section*{The synthetic datasets}
+
+Each one is a single made-up graph with subgraphs planted in it. The label of a subgraph
+is a property of its shape, fixed when the dataset was made. The nodes have no features, so
+a model can only use the structure.
+
+\begin{description}
+\item[Density] The label is the share of a subgraph's possible edges that are present:
+low, medium or high. In the files the three ranges do not overlap: up to $0.074$, from
+$0.079$ to $0.168$, and from $0.174$.
+\item[Cut-Ratio] The label is how many edges leave the subgraph, out of how many could. Of
+the edges that touch a subgraph, $77\%$, $80\%$ and $83\%$ leave it on average in the three
+classes. The subgraphs themselves are almost complete: $95\%$ of their possible edges are
+present.
+\item[Coreness] The label is how deep in the core of the graph the subgraph sits, in three
+classes. The average core number of its nodes is $19.4$, $25.1$ and $30.7$ in the three
+classes, but each class covers almost the whole range, from about $3$ to $43$.
+\item[Component] The label says whether the subgraph is one piece or several. All pieces,
+in both classes, have exactly $15$ nodes. One class is a single piece of $15$ nodes. The
+other is $5$ to $10$ pieces that do not touch each other, so $75$ to $150$ nodes.
+\end{description}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrrrrr}
+\toprule
+ & Nodes & Edges & Avg.\ degree & Subgraphs & Classes & Avg.\ size & Median & Smallest--largest \\
+\midrule
+Density & $4{,}998$ & $29{,}962$ & $12.0$ & $250$ & 3 & $20.0$ & $20$ & $20$--$20$ \\
+Cut-Ratio & $5{,}000$ & $84{,}295$ & $33.7$ & $250$ & 3 & $20.0$ & $20$ & $20$--$20$ \\
+Coreness & $5{,}000$ & $119{,}205$ & $47.7$ & $221$ & 3 & $20.0$ & $20$ & $20$--$20$ \\
+Component & $17{,}260$ & $91{,}619$ & $10.6$ & $250$ & 2 & $65.0$ & $15$ & $15$--$150$ \\
+\bottomrule
+\end{tabular}
+\caption{Size of the synthetic graphs and of their subgraphs, counted as in Table 2.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+ & Of all nodes, & Of nodes in a & Pieces per & One piece & Edges inside & Same-label \\
+ & in no subgraph & subgraph, in two+ & subgraph & & a subgraph & neighbours (chance) \\
+\midrule
+Density & $55.0\%$ & $40.5\%$ & $8.1$ of $20.0$ & $3.2\%$ & $15.8\%$ & $32.9\%$ ($33.5\%$) \\
+Cut-Ratio & $37.5\%$ & $42.1\%$ & $1.0$ of $20.0$ & $100\%$ & $53.4\%$ & $31.4\%$ ($33.5\%$) \\
+Coreness & $11.6\%$ & $0\%$ & $1.0$ of $20.0$ & $100\%$ & $8.0\%$ & $38.6\%$ ($39.1\%$) \\
+Component & $5.8\%$ & $0\%$ & $4.3$ of $65.0$ & $50.4\%$ & $93.4\%$ & $82.6\%$ ($84.1\%$) \\
+\bottomrule
+\end{tabular}
+\caption{The same columns as Table 3. Here \emph{chance} is the sum of the squared label
+shares among the ends of the edges counted.}
+\end{table}
+
+\paragraph{Size says nothing, or everything.} In Density, Cut-Ratio and Coreness every
+subgraph has $20$ nodes. In Component size alone gives the label: $15$ nodes for one class,
+$75$ or more for the other.
+
+\paragraph{Neighbours carry no label signal.} In all four, neighbouring subgraphs share a
+label as often as chance or a little less, as in our data.
+
+\paragraph{Only Density falls apart like ours.} A Density subgraph of $20$ nodes splits into
+$8.1$ pieces. Cut-Ratio and Coreness subgraphs are always one piece.
+
+\paragraph{Coreness and Component do not share nodes.} No node is in two subgraphs, as in
+our data. In Density and Cut-Ratio about $40\%$ of the nodes in a subgraph are in two or
+more.
+
+\paragraph{The test sets are small.} The GLASS code draws a new random split in every run:
+half for training, a quarter for validation and a quarter for testing. That leaves $63$
+test subgraphs ($55$ in Coreness), so one subgraph more or less right moves the score by
+about $1.6$ points.
+
+\section*{Published results}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+ & PPI-BP & HPO-Metab & HPO-Neuro & EM-User \\
+\midrule
+SubGNN (2020) & $59.9 \pm 2.4$ & $53.7 \pm 2.3$ & $63.2 \pm 1.0$ & $81.4 \pm 4.6$ \\
+GLASS (2022) & $61.9 \pm 0.7$ & $61.4 \pm 0.5$ & $68.5 \pm 0.5$ & $88.8 \pm 0.6$ \\
+S2N, best version (2024) & $64.3 \pm 1.8$ & $63.9 \pm 1.7$ & $68.6 \pm 0.8$ & $89.0 \pm 1.6$ \\
+\bottomrule
+\end{tabular}
+\caption{Micro-F1 on the test set, mean and spread over $10$ runs, from Table 2 of the S2N
+paper (Kim and Oh, ICML 2024). For the binary EM-User this is the accuracy. The papers do not
+report AUC, the metric we use.}
+\end{table}
+
+\paragraph{Scores differ a lot between datasets.} The best methods reach $89\%$ on EM-User
+but only $64\%$ on PPI-BP and HPO-Metab, where there are six classes.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+ & Density & Cut-Ratio & Coreness & Component \\
+\midrule
+SubGNN (2020) & $91.9 \pm 1.6$ & $62.9 \pm 3.9$ & $65.9 \pm 9.2$ & $95.8 \pm 9.8$ \\
+GLASS (2022) & $93.0 \pm 0.9$ & $93.5 \pm 0.6$ & $84.0 \pm 0.9$ & $100.0 \pm 0.0$ \\
+S2N+A (2024) & $93.2 \pm 2.6$ & $56.0 \pm 0.0$ & $85.7 \pm 5.8$ & $100.0 \pm 0.0$ \\
+S2N+A with RWPE (2024) & $93.6 \pm 2.0$ & $89.2 \pm 2.6$ & $72.6 \pm 6.2$ & $100.0 \pm 0.0$ \\
+\bottomrule
+\end{tabular}
+\caption{Micro-F1 on the synthetic test sets, mean and spread over $10$ runs, from Table 3
+of the S2N paper. The SubGNN and GLASS rows are copied there from their own papers. S2N+A
+is the GCNII version; RWPE adds random-walk position features to the nodes.}
+\end{table}
+
+\paragraph{Component is solved, Cut-Ratio is not.} Every method is at or near $100\%$ on
+Component, where size gives the answer. Cut-Ratio spreads the methods most, from $56\%$ to
+$93.5\%$.
+
+\end{document}

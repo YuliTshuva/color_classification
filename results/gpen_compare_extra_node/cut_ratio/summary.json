@@ -1,0 +1,22 @@
+{
+    "dataset": "cut_ratio",
+    "backbone": "rgcn",
+    "readout": "extra_node",
+    "node_input": "struct",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 79.2,
+    "test_std": 2.99,
+    "val_mean": 92.8,
+    "val_std": 1.6,
+    "n_seeds": 10,
+    "n_trials": 6,
+    "mean_seconds_per_run": 5.0,
+    "n_nodes": 5000,
+    "n_graph_edges": 84295,
+    "n_same_subgraph_edges": 47399,
+    "n_subgraphs": 250,
+    "n_classes": 3,
+    "multilabel": false,
+    "hps": "{\"backbone\": \"rgcn\", \"readout\": \"extra_node\", \"lr\": 0.001, \"gnn_embedding_dim\": 128, \"gnn_hidden_dim\": 156, \"k_gnn_layers\": 2, \"gnn_dropout_rate\": 0.0, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 0.0, \"node_input\": \"struct\", \"color_mlp_hidden_dims\": 64, \"supernode_init\": \"zeros\"}",
+    "by_variant": "[{\"backbone\": \"rgcn\", \"readout\": \"extra_node\", \"max\": 0.96, \"count\": 6}]"
+}

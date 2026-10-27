@@ -434,16 +434,20 @@ class RGCNLayer(nn.Module):
     For each relation type r, applies a separate linear transform W_r to
     neighboring features, aggregates (sum + normalize), then adds a self-loop
     transform. All contributions are summed and passed through an activation.
+    With edge_weight, the per-relation mean becomes a weighted mean. Relations in
+    sum_relations are a weighted sum instead, for weights normalized outside
+    (e.g. D^-1/2 A D^-1/2).
     """
 
     def __init__(self, in_dim: int, out_dim: int, num_relations: int,
-                 self_loop: bool = True, directed: bool = False):
+                 self_loop: bool = True, directed: bool = False, sum_relations=()):
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.num_relations = num_relations
         self.self_loop = self_loop
         self.directed = directed
+        self.sum_relations = set(sum_relations)
 
         # One weight matrix per relation: shape (num_relations, in_dim, out_dim)
         self.weight = nn.Parameter(torch.Tensor(num_relations, in_dim, out_dim))
@@ -467,6 +471,7 @@ class RGCNLayer(nn.Module):
             x: torch.Tensor,  # [N, in_dim]  node features
             edge_index: torch.Tensor,  # [2, E]       source/target node indices
             edge_type: torch.Tensor,  # [E]          relation id for each edge
+            edge_weight: torch.Tensor = None,  # [E]  optional positive weight per edge
     ) -> torch.Tensor:
         N = x.size(0)
         out = torch.zeros(N, self.out_dim, device=x.device)
@@ -482,21 +487,24 @@ class RGCNLayer(nn.Module):
             src = edge_index[0, mask]
             dst = edge_index[1, mask]
 
+            w = torch.ones(src.shape[0], device=x.device) if edge_weight is None else edge_weight[mask]
+
             if not self.directed:
                 src = torch.cat([src, edge_index[1, mask]])
                 dst = torch.cat([dst, edge_index[0, mask]])
+                w = torch.cat([w, w])
 
             # Single pass over the (now doubled) edge list
-            msg = x[src] @ self.weight[r]
+            msg = (x[src] @ self.weight[r]) * w.unsqueeze(1)
 
             deg = torch.zeros(N, device=x.device)
-            deg.scatter_add_(0, dst, torch.ones(src.shape[0], device=x.device))
+            deg.scatter_add_(0, dst, w)
             deg_inv = torch.where(deg > 0, 1.0 / deg, torch.zeros_like(deg))
 
             agg = torch.zeros(N, self.out_dim, device=x.device)
             agg.scatter_add_(0, dst.unsqueeze(1).expand_as(msg), msg)
 
-            out += agg * deg_inv.unsqueeze(1)
+            out += agg if r in self.sum_relations else agg * deg_inv.unsqueeze(1)
 
         # --- Self-loop ---
         if self.self_loop:
@@ -518,20 +526,21 @@ class RGCN(nn.Module):
             num_relations: int,
             num_layers: int = 2,
             dropout: float = 0.0,
-            directed: bool = False
+            directed: bool = False,
+            sum_relations=()
     ):
         super().__init__()
         self.dropout = dropout
 
         dims = [in_dim] + [hidden_dim] * (num_layers - 1) + [out_dim]
         self.layers = nn.ModuleList([
-            RGCNLayer(dims[i], dims[i + 1], num_relations, directed=directed)
+            RGCNLayer(dims[i], dims[i + 1], num_relations, directed=directed, sum_relations=sum_relations)
             for i in range(num_layers)
         ])
 
-    def forward(self, x, edge_index, edge_type):
+    def forward(self, x, edge_index, edge_type, edge_weight=None):
         for i, layer in enumerate(self.layers):
-            x = layer(x, edge_index, edge_type)
+            x = layer(x, edge_index, edge_type, edge_weight)
             if i < len(self.layers) - 1:  # activation on all but last
                 x = F.relu(x)
                 x = F.dropout(x, p=self.dropout, training=self.training)
@@ -551,6 +560,8 @@ class RGATLayer(nn.Module):
     Attention score for edge (i -> j) under relation r:
         e_{ij}^r = LeakyReLU( a_r^T [W_r h_i || W_r h_j] )
         alpha_{ij}^r = softmax over all neighbors of j under r
+    With edge_weight w_ij, log(w_ij) is added to e_{ij}^r, so the attention
+    starts from the weights' proportions and learns on top of them.
     """
 
     def __init__(
@@ -604,6 +615,7 @@ class RGATLayer(nn.Module):
             x: torch.Tensor,  # [N, in_dim]
             edge_index: torch.Tensor,  # [2, E]
             edge_type: torch.Tensor,  # [E]
+            edge_weight: torch.Tensor = None,  # [E] optional positive weight per edge
     ) -> torch.Tensor:
         N = x.size(0)
         out = torch.zeros(N, self.out_dim, device=x.device)
@@ -616,8 +628,11 @@ class RGATLayer(nn.Module):
             src = edge_index[0, mask]
             dst = edge_index[1, mask]
 
+            w = None if edge_weight is None else edge_weight[mask]
+
             if not self.directed:
                 src, dst = torch.cat([src, dst]), torch.cat([dst, src])
+                w = None if w is None else torch.cat([w, w])
 
             # Project all nodes once: [N, num_heads, head_dim]. Computing the
             # attention logits from per-node halves (a^T[Wh_i||Wh_j] =
@@ -631,6 +646,8 @@ class RGATLayer(nn.Module):
 
             # e: [E_r, num_heads]
             e = self.leaky_relu(s_src[src] + s_dst[dst])
+            if w is not None:
+                e = e + w.log().unsqueeze(1)
 
             # Softmax over neighbors of each dst node, per head
             # We use scatter to compute the softmax denominator
@@ -701,9 +718,9 @@ class RGAT(nn.Module):
             for i in range(num_layers)
         ])
 
-    def forward(self, x, edge_index, edge_type):
+    def forward(self, x, edge_index, edge_type, edge_weight=None):
         for i, layer in enumerate(self.layers):
-            x = layer(x, edge_index, edge_type)
+            x = layer(x, edge_index, edge_type, edge_weight)
             if i < len(self.layers) - 1:
                 x = F.elu(x)
                 x = F.dropout(x, p=self.dropout, training=self.training)

@@ -1,0 +1,22 @@
+{
+    "dataset": "density",
+    "backbone": "rgcn",
+    "readout": "gated_attn",
+    "node_input": "learned",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 42.0,
+    "test_std": 10.0,
+    "val_mean": 52.0,
+    "val_std": 8.0,
+    "n_seeds": 2,
+    "n_trials": 2,
+    "mean_seconds_per_run": 4.1,
+    "n_nodes": 4998,
+    "n_graph_edges": 29962,
+    "n_same_subgraph_edges": 40344,
+    "n_subgraphs": 250,
+    "n_classes": 3,
+    "multilabel": false,
+    "hps": "{\"backbone\": \"rgcn\", \"readout\": \"gated_attn\", \"lr\": 0.003, \"gnn_embedding_dim\": 100, \"gnn_hidden_dim\": 128, \"k_gnn_layers\": 1, \"gnn_dropout_rate\": 0.0, \"gnn_mlp_hidden_dims\": 50, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 0.0, \"node_input\": \"learned\", \"node_input_dim\": 128, \"color_mlp_hidden_dims\": 50, \"attn_pool_hidden_dim\": 64, \"attn_pool_dropout\": 0.0}",
+    "by_variant": "[{\"backbone\": \"rgat\", \"readout\": \"multistat\", \"max\": 0.4, \"count\": 1}, {\"backbone\": \"rgcn\", \"readout\": \"gated_attn\", \"max\": 0.56, \"count\": 1}]"
+}

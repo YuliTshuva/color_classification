@@ -1,0 +1,22 @@
+{
+    "dataset": "hpo_metab",
+    "backbone": "rgcn",
+    "readout": "multistat",
+    "node_input": "learned",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 51.74,
+    "test_std": 3.12,
+    "val_mean": 53.12,
+    "val_std": 2.41,
+    "n_seeds": 10,
+    "n_trials": 87,
+    "mean_seconds_per_run": 8.7,
+    "n_nodes": 14587,
+    "n_graph_edges": 3238174,
+    "n_same_subgraph_edges": 138208,
+    "n_subgraphs": 2400,
+    "n_classes": 6,
+    "multilabel": false,
+    "hps": "{\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"gnn_embedding_dim\": 128, \"gnn_hidden_dim\": 156, \"k_gnn_layers\": 1, \"gnn_dropout_rate\": 0.1, \"gnn_mlp_hidden_dims\": 80, \"mlp_dropout_rate\": 0.1, \"weight_decay\": 0.0001, \"node_input\": \"learned\", \"node_input_dim\": 128, \"color_mlp_hidden_dims\": 50}",
+    "by_variant": "[{\"backbone\": \"rgat\", \"readout\": \"gated_attn\", \"max\": 0.1926, \"count\": 2}, {\"backbone\": \"rgat\", \"readout\": \"mean\", \"max\": 0.2828, \"count\": 1}, {\"backbone\": \"rgat\", \"readout\": \"multistat\", \"max\": 0.5205, \"count\": 6}, {\"backbone\": \"rgat\", \"readout\": \"node_score_mean\", \"max\": 0.3443, \"count\": 2}, {\"backbone\": \"rgat\", \"readout\": \"pma\", \"max\": 0.2992, \"count\": 2}, {\"backbone\": \"rgat\", \"readout\": \"supernode\", \"max\": 0.3279, \"count\": 1}, {\"backbone\": \"rgcn\", \"readout\": \"gated_attn\", \"max\": 0.459, \"count\": 5}, {\"backbone\": \"rgcn\", \"readout\": \"mean\", \"max\": 0.4467, \"count\": 3}, {\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"max\": 0.582, \"count\": 46}, {\"backbone\": \"rgcn\", \"readout\": \"node_score_mean\", \"max\": 0.4467, \"count\": 8}, {\"backbone\": \"rgcn\", \"readout\": \"pma\", \"max\": 0.4918, \"count\": 5}, {\"backbone\": \"rgcn\", \"readout\": \"supernode\", \"max\": 0.459, \"count\": 6}]"
+}

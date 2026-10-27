@@ -1,0 +1,22 @@
+{
+    "dataset": "density",
+    "backbone": "rgat",
+    "readout": "multistat",
+    "node_input": "const",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 35.6,
+    "test_std": 5.5,
+    "val_mean": 34.0,
+    "val_std": 13.05,
+    "n_seeds": 10,
+    "n_trials": 97,
+    "mean_seconds_per_run": 0.5,
+    "n_nodes": 4998,
+    "n_graph_edges": 29962,
+    "n_same_subgraph_edges": 40344,
+    "n_subgraphs": 250,
+    "n_classes": 3,
+    "multilabel": false,
+    "hps": "{\"backbone\": \"rgat\", \"readout\": \"multistat\", \"gnn_embedding_dim\": 128, \"gnn_hidden_dim\": 100, \"k_gnn_layers\": 2, \"gnn_dropout_rate\": 0.0, \"gnn_mlp_hidden_dims\": 50, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 1e-05, \"node_input\": \"const\", \"num_heads\": 4, \"color_mlp_hidden_dims\": 50}",
+    "by_variant": "[{\"backbone\": \"rgat\", \"readout\": \"gated_attn\", \"max\": 0.36, \"count\": 4}, {\"backbone\": \"rgat\", \"readout\": \"mean\", \"max\": 0.36, \"count\": 4}, {\"backbone\": \"rgat\", \"readout\": \"multistat\", \"max\": 0.48, \"count\": 28}, {\"backbone\": \"rgat\", \"readout\": \"node_score_mean\", \"max\": 0.48, \"count\": 31}, {\"backbone\": \"rgat\", \"readout\": \"pma\", \"max\": 0.36, \"count\": 7}, {\"backbone\": \"rgat\", \"readout\": \"supernode\", \"max\": 0.48, \"count\": 4}, {\"backbone\": \"rgcn\", \"readout\": \"gated_attn\", \"max\": 0.36, \"count\": 1}, {\"backbone\": \"rgcn\", \"readout\": \"mean\", \"max\": 0.16, \"count\": 2}, {\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"max\": 0.16, \"count\": 4}, {\"backbone\": \"rgcn\", \"readout\": \"node_score_mean\", \"max\": 0.48, \"count\": 9}, {\"backbone\": \"rgcn\", \"readout\": \"pma\", \"max\": 0.36, \"count\": 2}, {\"backbone\": \"rgcn\", \"readout\": \"supernode\", \"max\": 0.36, \"count\": 1}]"
+}
