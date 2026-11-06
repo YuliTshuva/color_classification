@@ -1,0 +1,22 @@
+{
+    "dataset": "hpo_neuro",
+    "backbone": "rgcn",
+    "readout": "multistat",
+    "node_input": "learned",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 62.3,
+    "test_std": 1.01,
+    "val_mean": 52.41,
+    "val_std": 1.53,
+    "n_seeds": 10,
+    "n_trials": 12,
+    "mean_seconds_per_run": 128.5,
+    "n_nodes": 14587,
+    "n_graph_edges": 3238174,
+    "n_same_subgraph_edges": 237827,
+    "n_subgraphs": 4000,
+    "n_classes": 10,
+    "multilabel": true,
+    "hps": "{\"node_input_dim\": 64, \"backbone\": \"rgcn\", \"readout\": \"multistat\", \"lr\": 0.003, \"gnn_embedding_dim\": 156, \"gnn_hidden_dim\": 128, \"k_gnn_layers\": 1, \"gnn_dropout_rate\": 0.0, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 0.0, \"node_input\": \"learned\", \"color_mlp_hidden_dims\": 64, \"copies\": true, \"copy_clique\": false, \"copy_counts\": true, \"pma_heads\": 4, \"pma_sabs\": 1, \"attn_pool_hidden_dim\": 32, \"attn_pool_dropout\": 0.0}",
+    "by_variant": "[{\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"max\": 0.5522, \"count\": 6}, {\"backbone\": \"rgcn\", \"readout\": \"transformer\", \"max\": 0.5281, \"count\": 6}]"
+}

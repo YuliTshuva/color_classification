@@ -1,0 +1,22 @@
+{
+    "dataset": "hpo_neuro",
+    "backbone": "rgcn",
+    "readout": "mean",
+    "node_input": "gin_ft",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 63.61,
+    "test_std": 1.17,
+    "val_mean": 53.74,
+    "val_std": 0.69,
+    "n_seeds": 10,
+    "n_trials": 4,
+    "mean_seconds_per_run": 252.5,
+    "n_nodes": 14587,
+    "n_graph_edges": 3238174,
+    "n_same_subgraph_edges": 237827,
+    "n_subgraphs": 4000,
+    "n_classes": 10,
+    "multilabel": true,
+    "hps": "{\"backbone\": \"rgcn\", \"gnn_embedding_dim\": 64, \"gnn_hidden_dim\": 64, \"gnn_dropout_rate\": 0.5, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.5, \"color_mlp_hidden_dims\": 64, \"weight_decay\": 0.0, \"node_input\": \"gin_ft\", \"feature_norm\": \"standardize\", \"clique_norm\": \"none\", \"node_loss_weight\": 0.0, \"lr\": 0.005, \"k_gnn_layers\": 1, \"graph_agg\": \"gcn\", \"readout\": \"mean\", \"norm\": \"batch\", \"n_batches\": 10}",
+    "by_variant": "[{\"backbone\": \"rgcn\", \"readout\": \"mean\", \"max\": 0.5259, \"count\": 4}]"
+}

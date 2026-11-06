@@ -1,0 +1,22 @@
+{
+    "dataset": "hpo_metab",
+    "backbone": "rgcn",
+    "readout": "multistat",
+    "node_input": "gin_ft",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 46.47,
+    "test_std": 3.48,
+    "val_mean": 53.08,
+    "val_std": 3.21,
+    "n_seeds": 10,
+    "n_trials": 4,
+    "mean_seconds_per_run": 45.5,
+    "n_nodes": 14587,
+    "n_graph_edges": 3238174,
+    "n_same_subgraph_edges": 138208,
+    "n_subgraphs": 2400,
+    "n_classes": 6,
+    "multilabel": false,
+    "hps": "{\"backbone\": \"rgcn\", \"gnn_embedding_dim\": 64, \"gnn_hidden_dim\": 64, \"gnn_dropout_rate\": 0.5, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.5, \"color_mlp_hidden_dims\": 64, \"weight_decay\": 0.0, \"node_input\": \"gin_ft\", \"feature_norm\": \"standardize\", \"clique_norm\": \"none\", \"node_loss_weight\": 0.0, \"lr\": 0.005, \"k_gnn_layers\": 1, \"graph_agg\": \"gcn\", \"readout\": \"multistat\", \"norm\": \"layer\", \"n_batches\": 1}",
+    "by_variant": "[{\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"max\": 0.5697, \"count\": 4}]"
+}

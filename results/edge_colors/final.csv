@@ -1,0 +1,17 @@
+role,dataset,config,reference,coloring,training,aggregation,pooling,tune,seeds,n_seeds,oom,val_mean,val_std,test_mean,test_std,train_mean,epochs_mean,seconds_mean
+best,ppi_bp,Gin_Gout__ours__mean__size,,Gin_Gout,ours,mean,size,,all,10,False,67.75,1.73,59.94,0.94,97.7,277.9,6.6
+reference,ppi_bp,reference__edge_label_glass,edge_label_glass,,,,,,all,10,False,66.56,1.19,56.29,2.82,92.87,246.1,6.9
+best,hpo_metab,G__glass__sum__gated_attn__h128_lr3_d0.5_c0,,G,glass,sum,gated_attn,h128_lr3_d0.5_c0,all,10,False,69.34,0.77,61.06,2.29,89.34,70.1,250.8
+reference,hpo_metab,reference__edge_label,edge_label,,,,,,all,10,False,59.22,1.93,60.17,2.65,88.72,207.9,56.4
+best,hpo_neuro,Gin_Gout__glass__attention__multistat__hglass_lr1_d0.5_c0,,Gin_Gout,glass,attention,multistat,hglass_lr1_d0.5_c0,all,10,False,59.14,0.68,69.55,0.88,91.5,101.1,951.2
+reference,hpo_neuro,reference__glass_plain,glass_plain,,,,,,all,10,False,57.38,0.8,68.7,0.87,93.57,119.2,569.6
+best,em_user,G__glass__gcn__max__h128_lr3_d0.5_c0,,G,glass,gcn,max,h128_lr3_d0.5_c0,all,10,False,78.77,3.19,73.06,5.97,93.9,38.6,173.0
+reference,em_user,reference__glass_plain,glass_plain,,,,,,all,10,False,76.94,1.31,80.82,8.81,97.35,34.2,101.4
+best,density,I_Oin_Oout__glass__sum__mean__h128_lr0.33_d0_c1,,I_Oin_Oout,glass,sum,mean,h128_lr0.33_d0_c1,all,10,False,97.26,2.4,94.76,3.18,97.12,69.9,66.7
+reference,density,reference__copies_recipe,copies_recipe,,,,,,all,10,False,97.9,1.04,95.08,2.79,99.12,206.1,3.0
+best,cut_ratio,Icopy_Iplain_Osub_Onone__ours__sum__mean__hglass_lr3_d0.5_c0,,Icopy_Iplain_Osub_Onone,ours,sum,mean,hglass_lr3_d0.5_c0,all,10,False,95.0,2.44,89.05,3.98,96.48,283.3,2.7
+reference,cut_ratio,reference__copies_recipe,copies_recipe,,,,,,all,10,False,97.9,2.61,93.65,2.75,97.52,73.3,38.4
+best,coreness,I+O_C__glass__attention__gated_attn__h128_lr3_d0_c0,,I+O_C,glass,attention,gated_attn,h128_lr3_d0_c0,all,10,False,92.54,3.68,86.54,5.41,91.08,63.9,67.3
+reference,coreness,reference__transformer,transformer,,,,,,all,10,False,90.91,3.64,83.45,6.83,91.89,222.7,3.8
+best,component,G__glass__attention__multistat,,G,glass,attention,multistat,,all,10,False,100.0,0.0,100.0,0.0,100.0,300.0,23.5
+reference,component,reference__copies_skip,copies_skip,,,,,,all,10,False,99.84,0.48,99.68,0.64,99.68,297.2,27.4

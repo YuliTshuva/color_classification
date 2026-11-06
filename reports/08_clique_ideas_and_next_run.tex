@@ -142,20 +142,19 @@ also trained again with 10 new seeds. em\_user was left out, as before.
  & \multicolumn{4}{c|}{clique models} & \multicolumn{2}{c|}{extra-node models} & \multicolumn{3}{c}{published} \\
 dataset & plain & none & symmetric & sym.\ $+1/N_C$ & extra node & hub graph & SubGNN & GLASS & GPEN \\
 \midrule
-ppi\_bp    & 59.2\,{\scriptsize$\pm$1.1} & 59.9\,{\scriptsize$\pm$2.1} & \textbf{60.0}\,{\scriptsize$\pm$1.9} & 59.4\,{\scriptsize$\pm$2.9} & \textbf{60.6}\,{\scriptsize$\pm$1.9} & 60.3\,{\scriptsize$\pm$1.8} & 59.9\,{\scriptsize$\pm$2.5} & 61.9\,{\scriptsize$\pm$2.2} & \textbf{64.4}\,{\scriptsize$\pm$0.9} \\
-hpo\_metab & 54.7\,{\scriptsize$\pm$3.4} & 53.7\,{\scriptsize$\pm$2.8} & \textbf{55.3}\,{\scriptsize$\pm$2.4} & 53.7\,{\scriptsize$\pm$3.3} & 52.4\,{\scriptsize$\pm$4.3} & \textbf{52.6}\,{\scriptsize$\pm$2.3} & 53.7\,{\scriptsize$\pm$2.5} & 61.4\,{\scriptsize$\pm$1.6} & \textbf{63.9}\,{\scriptsize$\pm$0.9} \\
-hpo\_neuro & 62.4\,{\scriptsize$\pm$0.9} & 62.7\,{\scriptsize$\pm$1.0} & \textbf{63.2}\,{\scriptsize$\pm$1.1} & 63.0\,{\scriptsize$\pm$1.6} & \textbf{60.9}\,{\scriptsize$\pm$1.2} & 60.3\,{\scriptsize$\pm$0.9} & 64.4\,{\scriptsize$\pm$1.9} & 68.5\,{\scriptsize$\pm$1.6} & \textbf{69.1}\,{\scriptsize$\pm$0.6} \\
-density    & \textbf{78.8}\,{\scriptsize$\pm$6.5} & 70.8\,{\scriptsize$\pm$3.1} & 75.2\,{\scriptsize$\pm$4.7} & 72.8\,{\scriptsize$\pm$3.9} & 67.2\,{\scriptsize$\pm$5.0} & \textbf{69.2}\,{\scriptsize$\pm$5.4} & 91.9\,{\scriptsize$\pm$1.9} & 93.0\,{\scriptsize$\pm$2.8} & \textbf{95.6}\,{\scriptsize$\pm$1.6} \\
-cut\_ratio & \textbf{75.6}\,{\scriptsize$\pm$4.9} & 73.2\,{\scriptsize$\pm$3.6} & 73.2\,{\scriptsize$\pm$4.0} & \textbf{75.6}\,{\scriptsize$\pm$3.3} & 79.2\,{\scriptsize$\pm$3.0} & \textbf{81.6}\,{\scriptsize$\pm$2.7} & 62.9\,{\scriptsize$\pm$4.1} & 93.5\,{\scriptsize$\pm$1.9} & \textbf{93.6}\,{\scriptsize$\pm$1.6} \\
-coreness   & 84.4\,{\scriptsize$\pm$5.2} & 82.6\,{\scriptsize$\pm$3.4} & 84.4\,{\scriptsize$\pm$5.2} & \textbf{84.8}\,{\scriptsize$\pm$4.9} & 76.5\,{\scriptsize$\pm$3.5} & \textbf{78.7}\,{\scriptsize$\pm$3.1} & 65.9\,{\scriptsize$\pm$9.8} & 84.0\,{\scriptsize$\pm$2.8} & \textbf{87.6}\,{\scriptsize$\pm$1.9} \\
-component  & \textbf{99.2}\,{\scriptsize$\pm$1.6} & 86.0\,{\scriptsize$\pm$12.2} & 84.8\,{\scriptsize$\pm$21.5} & 83.2\,{\scriptsize$\pm$23.2} & 67.2\,{\scriptsize$\pm$8.5} & \textbf{92.0}\,{\scriptsize$\pm$3.6} & 95.8\,{\scriptsize$\pm$10.1} & \textbf{100.0}\,{\scriptsize$\pm$0.0} & \textbf{100.0}\,{\scriptsize$\pm$0.0} \\
+ppi\_bp    & 59.2\,{\scriptsize$\pm$1.1} & 59.9\,{\scriptsize$\pm$2.1} & 60.0\,{\scriptsize$\pm$1.9} & 59.4\,{\scriptsize$\pm$2.9} & 60.6\,{\scriptsize$\pm$1.9} & 60.3\,{\scriptsize$\pm$1.8} & 59.9\,{\scriptsize$\pm$2.5} & 61.9\,{\scriptsize$\pm$2.2} & \textbf{64.4}\,{\scriptsize$\pm$0.9} \\
+hpo\_metab & 54.7\,{\scriptsize$\pm$3.4} & 53.7\,{\scriptsize$\pm$2.8} & 55.3\,{\scriptsize$\pm$2.4} & 53.7\,{\scriptsize$\pm$3.3} & 52.4\,{\scriptsize$\pm$4.3} & 52.6\,{\scriptsize$\pm$2.3} & 53.7\,{\scriptsize$\pm$2.5} & 61.4\,{\scriptsize$\pm$1.6} & \textbf{63.9}\,{\scriptsize$\pm$0.9} \\
+hpo\_neuro & 62.4\,{\scriptsize$\pm$0.9} & 62.7\,{\scriptsize$\pm$1.0} & 63.2\,{\scriptsize$\pm$1.1} & 63.0\,{\scriptsize$\pm$1.6} & 60.9\,{\scriptsize$\pm$1.2} & 60.3\,{\scriptsize$\pm$0.9} & 64.4\,{\scriptsize$\pm$1.9} & 68.5\,{\scriptsize$\pm$1.6} & \textbf{69.1}\,{\scriptsize$\pm$0.6} \\
+density    & 78.8\,{\scriptsize$\pm$6.5} & 70.8\,{\scriptsize$\pm$3.1} & 75.2\,{\scriptsize$\pm$4.7} & 72.8\,{\scriptsize$\pm$3.9} & 67.2\,{\scriptsize$\pm$5.0} & 69.2\,{\scriptsize$\pm$5.4} & 91.9\,{\scriptsize$\pm$1.9} & 93.0\,{\scriptsize$\pm$2.8} & \textbf{95.6}\,{\scriptsize$\pm$1.6} \\
+cut\_ratio & 75.6\,{\scriptsize$\pm$4.9} & 73.2\,{\scriptsize$\pm$3.6} & 73.2\,{\scriptsize$\pm$4.0} & 75.6\,{\scriptsize$\pm$3.3} & 79.2\,{\scriptsize$\pm$3.0} & 81.6\,{\scriptsize$\pm$2.7} & 62.9\,{\scriptsize$\pm$4.1} & 93.5\,{\scriptsize$\pm$1.9} & \textbf{93.6}\,{\scriptsize$\pm$1.6} \\
+coreness   & 84.4\,{\scriptsize$\pm$5.2} & 82.6\,{\scriptsize$\pm$3.4} & 84.4\,{\scriptsize$\pm$5.2} & 84.8\,{\scriptsize$\pm$4.9} & 76.5\,{\scriptsize$\pm$3.5} & 78.7\,{\scriptsize$\pm$3.1} & 65.9\,{\scriptsize$\pm$9.8} & 84.0\,{\scriptsize$\pm$2.8} & \textbf{87.6}\,{\scriptsize$\pm$1.9} \\
+component  & 99.2\,{\scriptsize$\pm$1.6} & 86.0\,{\scriptsize$\pm$12.2} & 84.8\,{\scriptsize$\pm$21.5} & 83.2\,{\scriptsize$\pm$23.2} & 67.2\,{\scriptsize$\pm$8.5} & 92.0\,{\scriptsize$\pm$3.6} & 95.8\,{\scriptsize$\pm$10.1} & \textbf{100.0}\,{\scriptsize$\pm$0.0} & \textbf{100.0}\,{\scriptsize$\pm$0.0} \\
 \bottomrule
 \end{tabular}
 \caption{Test micro-F1 ($\times 100$), mean $\pm$ std over 10 seeds. ``Plain'' is today's clique
 with a plain mean; ``none'' has graph edges only. The extra-node column is from run 3, the rest
 are from this run. The published columns are copied from Tables 1 and 3 of the GPEN paper (10
-runs each). Bold: best in each row within each group (clique, extra node, published); most gaps
-inside a group are smaller than the std.}
+runs each). Bold: the highest score in each row; most gaps inside a group are smaller than the std.}
 \label{tab:results}
 \end{table}
 
@@ -232,6 +231,116 @@ basic is missing there.
   \item \textbf{A check on overlap.} Plot test error against how many other subgraphs a test
         subgraph shares nodes with, from the saved predictions. If error does not rise, overlap
         can be dropped as a cause.
+\end{itemize}
+
+\section*{Run 5: one copy of a node per subgraph}
+
+\begin{itemize}[itemsep=1pt]
+  \item \textbf{GIN start:} input vectors start from SubGNN's pretrained GIN vectors (real datasets only).
+  \item \textbf{Copies:} each node gets a separate copy for each subgraph it is in.
+  \item \textbf{Edge split:} graph edges inside a subgraph and outside it get separate weights.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccc|ccc}
+\toprule
+dataset & plain clique & GIN start & copies & edge split & SubGNN & GLASS & GPEN \\
+\midrule
+ppi\_bp    & 59.2\,{\scriptsize$\pm$1.1} & \textbf{60.8}\,{\scriptsize$\pm$2.2} & 57.1\,{\scriptsize$\pm$1.4} & 59.9\,{\scriptsize$\pm$1.9} & 59.9\,{\scriptsize$\pm$2.5} & 61.9\,{\scriptsize$\pm$2.2} & \textbf{64.4}\,{\scriptsize$\pm$0.9} \\
+hpo\_metab & 54.7\,{\scriptsize$\pm$3.4} & 53.8\,{\scriptsize$\pm$5.0} & 56.9\,{\scriptsize$\pm$3.0} & \textbf{59.7}\,{\scriptsize$\pm$1.9} & 53.7\,{\scriptsize$\pm$2.5} & 61.4\,{\scriptsize$\pm$1.6} & \textbf{63.9}\,{\scriptsize$\pm$0.9} \\
+hpo\_neuro & 62.4\,{\scriptsize$\pm$0.9} & 60.0\,{\scriptsize$\pm$1.9} & 61.1\,{\scriptsize$\pm$1.6} & \textbf{64.1}\,{\scriptsize$\pm$1.5} & 64.4\,{\scriptsize$\pm$1.9} & 68.5\,{\scriptsize$\pm$1.6} & \textbf{69.1}\,{\scriptsize$\pm$0.6} \\
+density    & 78.8\,{\scriptsize$\pm$6.5} & -- & \textbf{92.4}\,{\scriptsize$\pm$5.8} & 34.4\,{\scriptsize$\pm$7.6} & 91.9\,{\scriptsize$\pm$1.9} & 93.0\,{\scriptsize$\pm$2.8} & \textbf{95.6}\,{\scriptsize$\pm$1.6} \\
+cut\_ratio & \textbf{75.6}\,{\scriptsize$\pm$4.9} & -- & 66.0\,{\scriptsize$\pm$9.8} & 53.6\,{\scriptsize$\pm$7.6} & 62.9\,{\scriptsize$\pm$4.1} & 93.5\,{\scriptsize$\pm$1.9} & \textbf{93.6}\,{\scriptsize$\pm$1.6} \\
+coreness   & \textbf{84.4}\,{\scriptsize$\pm$5.2} & -- & 80.4\,{\scriptsize$\pm$2.2} & 81.7\,{\scriptsize$\pm$3.3} & 65.9\,{\scriptsize$\pm$9.8} & 84.0\,{\scriptsize$\pm$2.8} & \textbf{87.6}\,{\scriptsize$\pm$1.9} \\
+component  & \textbf{99.2}\,{\scriptsize$\pm$1.6} & -- & 67.6\,{\scriptsize$\pm$1.2} & 88.8\,{\scriptsize$\pm$5.3} & 95.8\,{\scriptsize$\pm$10.1} & \textbf{100.0}\,{\scriptsize$\pm$0.0} & \textbf{100.0}\,{\scriptsize$\pm$0.0} \\
+\bottomrule
+\end{tabular}
+\caption{Test micro-F1 ($\times 100$), 10 seeds. Plain clique is from run 4; baselines from the GPEN paper. --: not run. Bold: best per group.}
+\label{tab:run5}
+\end{table}
+
+\begin{itemize}[itemsep=1pt]
+  \item Copies fix density (78.8 $\to$ 92.4, level with GLASS), but hurt cut\_ratio and component.
+  \item Edge split is our best on hpo (metab 59.7, neuro 64.1), but breaks density (34.4).
+  \item The GIN start helps a bit on ppi\_bp (+1.6, not significant) and not on hpo.
+\end{itemize}
+
+\section*{Run 6: one model for all datasets}
+
+Copies, plus:
+\begin{itemize}[itemsep=1pt]
+  \item each copy's number of graph edges inside and outside its subgraph, as input;
+  \item the transformer readout over the copies, tried next to the usual readout;
+  \item on the real datasets, frozen GIN vectors joined to a learned vector, tried next to the usual input.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccc|ccc}
+\toprule
+dataset & copies & run 6 & our best before & SubGNN & GLASS & GPEN \\
+\midrule
+ppi\_bp    & 57.1\,{\scriptsize$\pm$1.4} & 58.5\,{\scriptsize$\pm$1.4} & \textbf{60.8}\,{\scriptsize$\pm$2.2} & 59.9\,{\scriptsize$\pm$2.5} & 61.9\,{\scriptsize$\pm$2.2} & \textbf{64.4}\,{\scriptsize$\pm$0.9} \\
+hpo\_metab & 56.9\,{\scriptsize$\pm$3.0} & 53.5\,{\scriptsize$\pm$2.4} & \textbf{59.7}\,{\scriptsize$\pm$1.9} & 53.7\,{\scriptsize$\pm$2.5} & 61.4\,{\scriptsize$\pm$1.6} & \textbf{63.9}\,{\scriptsize$\pm$0.9} \\
+hpo\_neuro & 61.1\,{\scriptsize$\pm$1.6} & 62.3\,{\scriptsize$\pm$1.0} & \textbf{64.1}\,{\scriptsize$\pm$1.5} & 64.4\,{\scriptsize$\pm$1.9} & 68.5\,{\scriptsize$\pm$1.6} & \textbf{69.1}\,{\scriptsize$\pm$0.6} \\
+density    & 92.4\,{\scriptsize$\pm$5.8} & \textbf{94.4}\,{\scriptsize$\pm$2.0} & 92.4\,{\scriptsize$\pm$5.8} & 91.9\,{\scriptsize$\pm$1.9} & 93.0\,{\scriptsize$\pm$2.8} & \textbf{95.6}\,{\scriptsize$\pm$1.6} \\
+cut\_ratio & 66.0\,{\scriptsize$\pm$9.8} & 66.8\,{\scriptsize$\pm$6.2} & \textbf{81.6}\,{\scriptsize$\pm$2.7} & 62.9\,{\scriptsize$\pm$4.1} & 93.5\,{\scriptsize$\pm$1.9} & \textbf{93.6}\,{\scriptsize$\pm$1.6} \\
+coreness   & 80.4\,{\scriptsize$\pm$2.2} & 80.0\,{\scriptsize$\pm$7.6} & \textbf{89.1}\,{\scriptsize$\pm$4.9} & 65.9\,{\scriptsize$\pm$9.8} & 84.0\,{\scriptsize$\pm$2.8} & \textbf{87.6}\,{\scriptsize$\pm$1.9} \\
+component  & 67.6\,{\scriptsize$\pm$1.2} & 98.0\,{\scriptsize$\pm$3.2} & \textbf{99.2}\,{\scriptsize$\pm$1.6} & 95.8\,{\scriptsize$\pm$10.1} & \textbf{100.0}\,{\scriptsize$\pm$0.0} & \textbf{100.0}\,{\scriptsize$\pm$0.0} \\
+\bottomrule
+\end{tabular}
+\caption{Test micro-F1 ($\times 100$), 10 seeds. Copies is from run 5. Our best before is the best of runs 2--5 per row. Bold: best per group.}
+\label{tab:run6}
+\end{table}
+
+\begin{itemize}[itemsep=1pt]
+  \item Density is our best ever (94.4), above GLASS.
+  \item Component is back to 98.0.
+  \item Cut ratio is unchanged (66.8), although the input holds the outside counts it needs.
+  \item The real datasets and coreness are below our best.
+  \item On hpo\_metab, the usual readout with GIN + learned input ran out of GPU memory, so it was not tested.
+\end{itemize}
+
+\section*{Runs 7--8: is it the model or the training?}
+
+\begin{itemize}[itemsep=1pt]
+  \item \textbf{Counts to classifier:} run 6, plus each subgraph's size, inside edges and outside edges fed straight to the final classifier.
+  \item \textbf{Plain GNN:} GLASS's plain GNN rebuilt in our code (graph only, pretrained input; real datasets only).
+  \item \textbf{+ GLASS training:} the same two models with a normalization layer after each GNN layer, and optional mini-batches.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcc|cc|cc}
+\toprule
+ & \multicolumn{2}{c|}{counts to classifier} & \multicolumn{2}{c|}{plain GNN (ours)} & \multicolumn{2}{c}{GLASS paper} \\
+dataset & as is & + GLASS training & as is & + GLASS training & plain GNN & GLASS \\
+\midrule
+ppi\_bp    & 56.8\,{\scriptsize$\pm$3.1} & 59.8\,{\scriptsize$\pm$2.4} & 62.8\,{\scriptsize$\pm$2.3} & 61.6\,{\scriptsize$\pm$3.3} & 61.3 & 61.9 \\
+hpo\_metab & 53.3\,{\scriptsize$\pm$2.4} & 51.2\,{\scriptsize$\pm$2.3} & 46.6\,{\scriptsize$\pm$4.5} & 46.5\,{\scriptsize$\pm$3.5} & 59.7 & 61.4 \\
+hpo\_neuro & 61.8\,{\scriptsize$\pm$1.0} & 63.2\,{\scriptsize$\pm$1.2} & 61.8\,{\scriptsize$\pm$1.1} & 63.6\,{\scriptsize$\pm$1.2} & 66.8 & 68.5 \\
+density    & 94.4\,{\scriptsize$\pm$2.0} & 90.4\,{\scriptsize$\pm$2.7} & -- & -- & 46.2 & 93.0 \\
+cut\_ratio & 68.4\,{\scriptsize$\pm$4.2} & 76.0\,{\scriptsize$\pm$5.1} & -- & -- & 88.7 & 93.5 \\
+coreness   & 79.6\,{\scriptsize$\pm$4.4} & 85.2\,{\scriptsize$\pm$4.0} & -- & -- & 53.6 & 84.0 \\
+component  & 100.0\,{\scriptsize$\pm$0.0} & 99.2\,{\scriptsize$\pm$1.6} & -- & -- & 99.8 & 100.0 \\
+\bottomrule
+\end{tabular}
+\caption{Test micro-F1 ($\times 100$), 10 seeds. --: not run. GLASS columns are from Tables 3--6 of the GLASS paper.}
+\label{tab:run78}
+\end{table}
+
+\begin{itemize}[itemsep=1pt]
+  \item With counts at the classifier, cut ratio fit only 85\% of its training subgraphs; with normalization it fits 98\%, and test rises from 68.4 to 76.0.
+  \item Normalization also lifts coreness (79.6 $\to$ 85.2, above GLASS), but lowers density (94.4 $\to$ 90.4).
+  \item Mini-batches were chosen on only 3 of 10 datasets.
+  \item Our plain GNN matches GLASS's on ppi\_bp, but is 13 points behind on hpo\_metab, with or without GLASS training.
 \end{itemize}
 
 \end{document}

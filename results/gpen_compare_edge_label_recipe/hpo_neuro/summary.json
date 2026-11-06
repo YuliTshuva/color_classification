@@ -1,0 +1,22 @@
+{
+    "dataset": "hpo_neuro",
+    "backbone": "rgcn",
+    "readout": "multistat",
+    "node_input": "learned",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 66.14,
+    "test_std": 0.94,
+    "val_mean": 56.58,
+    "val_std": 0.67,
+    "n_seeds": 10,
+    "n_trials": 4,
+    "mean_seconds_per_run": 373.9,
+    "n_nodes": 14587,
+    "n_graph_edges": 3238174,
+    "n_same_subgraph_edges": 237827,
+    "n_subgraphs": 4000,
+    "n_classes": 10,
+    "multilabel": true,
+    "hps": "{\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"lr\": 0.002, \"gnn_embedding_dim\": 156, \"gnn_hidden_dim\": 128, \"k_gnn_layers\": 1, \"gnn_dropout_rate\": 0.0, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 0.0, \"node_input\": \"learned\", \"node_input_dim\": 64, \"color_mlp_hidden_dims\": 0, \"graph_split\": true, \"batch_size\": 99, \"lr_on\": \"train\", \"lr_factor\": 0.2, \"glass_stop\": true, \"norm\": \"graph\", \"input_norm\": \"graph\", \"input_dropout\": 0.5, \"msg_dropout\": 0.5}",
+    "by_variant": "[{\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"max\": 0.5746, \"count\": 2}, {\"backbone\": \"rgcn\", \"readout\": \"sum\", \"max\": 0.5533, \"count\": 2}]"
+}

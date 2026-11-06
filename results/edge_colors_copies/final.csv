@@ -1,0 +1,7 @@
+role,dataset,config,reference,coloring,training,aggregation,pooling,tune,seeds,n_seeds,oom,val_mean,val_std,test_mean,test_std,train_mean,epochs_mean,seconds_mean
+best,hpo_metab,I+O_C__glass__sum__gated_attn__h128_lr3_d0.5_c0,,I+O_C,glass,sum,gated_attn,h128_lr3_d0.5_c0,all,10,False,68.64,1.06,62.68,3.34,85.2,66.8,181.1
+reference,hpo_metab,reference__edge_label,edge_label,,,,,,all,10,False,59.22,1.93,60.17,2.65,88.72,207.9,56.4
+best,hpo_neuro,I_O_C__glass__gcn__sum,,I_O_C,glass,gcn,sum,,all,10,False,60.17,0.38,69.12,0.64,95.65,111.4,466.5
+reference,hpo_neuro,reference__glass_plain,glass_plain,,,,,,all,10,False,57.38,0.8,68.7,0.87,93.57,119.2,569.6
+best,em_user,Icopy_Iplain_O__ours__gcn__mean__h128_lr1_d0.5_c0,,Icopy_Iplain_O,ours,gcn,mean,h128_lr1_d0.5_c0,all,10,False,83.26,1.78,86.94,2.77,98.18,281.2,41.7
+reference,em_user,reference__glass_plain,glass_plain,,,,,,all,10,False,76.94,1.31,80.82,8.81,97.35,34.2,101.4

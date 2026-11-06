@@ -427,6 +427,26 @@ class AttentionClassifier(nn.Module):
         return self.mlp(x)
 
 
+class GraphNorm(nn.Module):
+    """
+    GraphNorm (Cai et al. 2021) over one graph, as GLASS uses it: subtract a
+    learned fraction of the mean over the nodes, divide by the std, then scale
+    and shift. Same as torch_geometric's GraphNorm with batch=None.
+    """
+
+    def __init__(self, dim, eps=1e-5):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+        self.bias = nn.Parameter(torch.zeros(dim))
+        self.mean_scale = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x):
+        out = x - self.mean_scale * x.mean(dim=0, keepdim=True)
+        std = (out.pow(2).mean(dim=0, keepdim=True) + self.eps).sqrt()
+        return self.weight * out / std + self.bias
+
+
 class RGCNLayer(nn.Module):
     """
     Relational Graph Convolutional Layer.
@@ -436,11 +456,12 @@ class RGCNLayer(nn.Module):
     transform. All contributions are summed and passed through an activation.
     With edge_weight, the per-relation mean becomes a weighted mean. Relations in
     sum_relations are a weighted sum instead, for weights normalized outside
-    (e.g. D^-1/2 A D^-1/2).
+    (e.g. D^-1/2 A D^-1/2). msg_dropout drops the aggregated neighbor part
+    before the self-loop is added (GLASS drops its messages the same way).
     """
 
     def __init__(self, in_dim: int, out_dim: int, num_relations: int,
-                 self_loop: bool = True, directed: bool = False, sum_relations=()):
+                 self_loop: bool = True, directed: bool = False, sum_relations=(), msg_dropout: float = 0.0):
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -448,6 +469,7 @@ class RGCNLayer(nn.Module):
         self.self_loop = self_loop
         self.directed = directed
         self.sum_relations = set(sum_relations)
+        self.msg_dropout = msg_dropout
 
         # One weight matrix per relation: shape (num_relations, in_dim, out_dim)
         self.weight = nn.Parameter(torch.Tensor(num_relations, in_dim, out_dim))
@@ -494,8 +516,8 @@ class RGCNLayer(nn.Module):
                 dst = torch.cat([dst, edge_index[0, mask]])
                 w = torch.cat([w, w])
 
-            # Single pass over the (now doubled) edge list
-            msg = (x[src] @ self.weight[r]) * w.unsqueeze(1)
+            # Transform each node once, then gather per edge (same result as x[src] @ W, far fewer FLOPs)
+            msg = (x @ self.weight[r])[src] * w.unsqueeze(1)
 
             deg = torch.zeros(N, device=x.device)
             deg.scatter_add_(0, dst, w)
@@ -505,6 +527,9 @@ class RGCNLayer(nn.Module):
             agg.scatter_add_(0, dst.unsqueeze(1).expand_as(msg), msg)
 
             out += agg if r in self.sum_relations else agg * deg_inv.unsqueeze(1)
+
+        if self.msg_dropout > 0:
+            out = F.dropout(out, p=self.msg_dropout, training=self.training)
 
         # --- Self-loop ---
         if self.self_loop:
@@ -527,23 +552,48 @@ class RGCN(nn.Module):
             num_layers: int = 2,
             dropout: float = 0.0,
             directed: bool = False,
-            sum_relations=()
+            sum_relations=(),
+            norm=None,
+            jk=False,
+            msg_dropout=0.0
     ):
+        """
+        norm: None, "batch", "layer" or "graph" - a normalization after every layer (GLASS uses graph).
+        jk: return every layer's output concatenated (jumping knowledge, GLASS's default), normalized
+            as one; the output size is then out_dim plus hidden_dim per extra layer (self.out_dim).
+        msg_dropout: dropout on each layer's aggregated messages (GLASS's dropout inside its conv).
+        """
         super().__init__()
         self.dropout = dropout
+        self.jk = jk
 
         dims = [in_dim] + [hidden_dim] * (num_layers - 1) + [out_dim]
+        self.out_dim = sum(dims[1:]) if jk else out_dim
         self.layers = nn.ModuleList([
-            RGCNLayer(dims[i], dims[i + 1], num_relations, directed=directed, sum_relations=sum_relations)
+            RGCNLayer(dims[i], dims[i + 1], num_relations, directed=directed, sum_relations=sum_relations,
+                      msg_dropout=msg_dropout)
             for i in range(num_layers)
         ])
+        norm_cls = {None: None, "batch": nn.BatchNorm1d, "layer": nn.LayerNorm, "graph": GraphNorm}[norm]
+        # With jk the last norm acts on the concatenation instead of the last layer alone
+        norm_dims = dims[1:-1] + [self.out_dim]
+        self.norms = None if norm_cls is None else nn.ModuleList([norm_cls(d) for d in norm_dims])
 
     def forward(self, x, edge_index, edge_type, edge_weight=None):
+        xs = []
         for i, layer in enumerate(self.layers):
             x = layer(x, edge_index, edge_type, edge_weight)
-            if i < len(self.layers) - 1:  # activation on all but last
+            xs.append(x)
+            last = i == len(self.layers) - 1
+            if self.norms is not None and not (last and self.jk):
+                x = self.norms[i](x)
+            if not last:  # activation on all but last
                 x = F.relu(x)
                 x = F.dropout(x, p=self.dropout, training=self.training)
+        if self.jk:
+            x = torch.cat(xs, dim=1)
+            if self.norms is not None:
+                x = self.norms[-1](x)
         return x  # return logits; apply softmax/sigmoid outside
 
 
@@ -701,11 +751,19 @@ class RGAT(nn.Module):
             attn_dropout: float = 0.0,
             negative_slope: float = 0.2,
             directed: bool = False,
+            norm=None,
+            jk=False,
     ):
+        """norm, jk: as in RGCN."""
         super().__init__()
         self.dropout = dropout
+        self.jk = jk
 
         dims = [in_dim] + [hidden_dim] * (num_layers - 1) + [out_dim]
+        self.out_dim = sum(dims[1:]) if jk else out_dim
+        norm_cls = {None: None, "batch": nn.BatchNorm1d, "layer": nn.LayerNorm, "graph": GraphNorm}[norm]
+        norm_dims = dims[1:-1] + [self.out_dim]
+        self.norms = None if norm_cls is None else nn.ModuleList([norm_cls(d) for d in norm_dims])
         self.layers = nn.ModuleList([
             RGATLayer(
                 dims[i], dims[i + 1],
@@ -719,9 +777,18 @@ class RGAT(nn.Module):
         ])
 
     def forward(self, x, edge_index, edge_type, edge_weight=None):
+        xs = []
         for i, layer in enumerate(self.layers):
             x = layer(x, edge_index, edge_type, edge_weight)
-            if i < len(self.layers) - 1:
+            xs.append(x)
+            last = i == len(self.layers) - 1
+            if self.norms is not None and not (last and self.jk):
+                x = self.norms[i](x)
+            if not last:
                 x = F.elu(x)
                 x = F.dropout(x, p=self.dropout, training=self.training)
+        if self.jk:
+            x = torch.cat(xs, dim=1)
+            if self.norms is not None:
+                x = self.norms[-1](x)
         return x  # logits; apply softmax/sigmoid outside

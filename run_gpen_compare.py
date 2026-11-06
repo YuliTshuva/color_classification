@@ -63,7 +63,18 @@ Usage (server):
   python scripts/plot_error_vs_size.py
   # The run after report 08: fine-tuned GIN input, per-subgraph copies, and split graph edges
   python run_gpen_compare.py --cases gin_ft member_copies edge_label --exclude em_user --max-parallel 3
-  python run_gpen_compare.py --jobs-per-gpu 2                 # two jobs share each GPU
+  # Run 6: copies with inside/outside counts, the transformer over the copies, frozen GIN + learned input
+  python run_gpen_compare.py --cases copies_plus --exclude em_user --max-parallel 3
+  # Run 7: counts past the GNN (needs copies_plus' results), and GLASS's GNN-plain rebuilt
+  python run_gpen_compare.py --cases copies_skip plain_gnn --exclude em_user --max-parallel 3
+  # Run 8: the two run-7 cases trained the GLASS way (needs their results)
+  python run_gpen_compare.py --cases plain_gnn_fix copies_skip_fix --exclude em_user --max-parallel 3
+  # Run 9: GLASS's own pretrained vectors as input (data/raw/subgnn/<name>/glass_embeddings.pth)
+  python run_gpen_compare.py --cases plain_gnn_glass copies_glass edge_label_glass copies_skip_tune \
+      --exclude em_user --max-parallel 3
+  # Run 10: GLASS's training recipe and GLASS's splits (GLASS_EVAL_CASES)
+  python run_gpen_compare.py --cases glass_plain edge_label_recipe copies_recipe --max-parallel 3
+  python run_gpen_compare.py --jobs-per-gpu 2                # two jobs share each GPU
   python run_gpen_compare.py --exclude em_user                 # all datasets but em_user
   python run_gpen_compare.py --dataset ppi_bp --smoke          # quick sanity run of every case
   python run_gpen_compare.py --dataset ppi_bp                  # one dataset: study (250 trials) + 10 seeds per case
@@ -108,7 +119,9 @@ SYNTHETIC = ["density", "cut_ratio", "coreness", "component"]
 DATASETS = REAL + SYNTHETIC
 # By edges + same-subgraph pairs, for scheduling --dataset all
 HEAVIEST_FIRST = ["em_user", "hpo_neuro", "hpo_metab", "ppi_bp", "coreness", "component", "cut_ratio", "density"]
-PRETRAINED = {"gin": "gin_embeddings.pth"}  # GraphSAINT-GCN trailed GIN and learned vectors in run 1
+# GraphSAINT-GCN trailed GIN and learned vectors in run 1. glass: GLASS's own pretrained vectors
+# (github.com/Xi-yuanWang/GLASS, Emb/<name>_64.pt, same node ids), real datasets
+PRETRAINED = {"gin": "gin_embeddings.pth", "glass": "glass_embeddings.pth"}
 SPLITS = {"train": 0, "val": 1, "test": 2}
 # The three cases - how a subgraph's representation is built:
 #   "pool"        : the second relation is the clique of each subgraph; pool the members,
@@ -131,27 +144,114 @@ SPLITS = {"train": 0, "val": 1, "test": 2}
 #   "gin_ft"      : pool with SubGNN's pretrained GIN vectors as the starting point of a trainable
 #                   input (GLASS fine-tunes its pretrained input), instead of frozen or learned
 #                   from scratch. Real datasets only - the synthetic ones ship no vectors
-#   "member_copies": the clique replaced by one copy of each node per subgraph it is in. A copy
+#   "member_copies": the clique replaced by one copy of each shared node (a node in two or more
+#                   subgraphs) per subgraph it is in; a node in one subgraph is its own copy. A copy
 #                   is linked to its node, and to the copies of the same subgraph that are its
 #                   graph neighbors; that inside relation is summed, so a copy can count its
 #                   inside edges for its own subgraph. The readout pools the copies, so a node in
-#                   two subgraphs no longer blends them (GLASS's in/out marks, exact per subgraph)
+#                   two subgraphs no longer blends them (GLASS's in/out marks, exact per subgraph).
+#                   copy_all: a copy of every member, as in runs 5-10
 #   "edge_label"  : pool with the graph edges split into two relations: inside (the two ends
 #                   share a subgraph; summed) and outside (mean). No copies, so a node in two
 #                   subgraphs counts both - the control that shows what the copies add
-# member_copies and edge_label use RGCN whatever pool's backbone: RGAT's softmax can only average,
+#   "copies_plus" : member_copies without the copy clique, plus each copy's exact inside and
+#                   outside edge counts as input (links to the outside neighbors would be ~100M
+#                   edges on hpo). The grid tries pool's readout and the transformer over the
+#                   copies, and on the real datasets the frozen GIN vectors concatenated with a
+#                   learned vector (gin_cat) next to pool's own input
+#   "copies_skip" : copies_plus' best config, plus each subgraph's own counts (size, inside
+#                   edges, outside edges) fed straight to the color head, past the GNN
+#   "plain_gnn"   : GLASS's GNN-plain rebuilt: the graph only, fine-tuned pretrained input,
+#                   hidden 64, dropout 0.5, no node head; aggregation mean or GCN-normalized sum.
+#                   Real datasets only. Unlike GLASS it trains full-batch, with no norm layers
+#   "plain_gnn_fix", "copies_skip_fix": the best config of plain_gnn / copies_skip, trained the
+#                   GLASS way: a norm layer after every GNN layer, and the train subgraphs split
+#                   into mini-batches, one optimizer step each (the GNN still sees the whole graph)
+#   "plain_gnn_glass": plain_gnn_fix's best config with GLASS's own pretrained vectors as the
+#                   fine-tuned input (glass_ft) instead of SubGNN's GIN vectors
+#   "copies_glass", "edge_label_glass": our two best models on the real datasets (copies_skip_fix,
+#                   edge_label) with the glass_ft input; edge_label also tries the two norms
+#   "copies_skip_tune": copies_skip_fix's best config with a wider grid (lr, layers, dropout,
+#                   norm). Synthetic datasets only - their runs take seconds
+# Run 10 - GLASS's training recipe (glass_recipe): mini-batches of GLASS's batch size, its
+# learning rate with the decay driven by the training loss, GraphNorm on the input and after
+# every layer, dropout on the input and on the messages, its pooling (sum, or size-normalized
+# sum) into a single linear layer, and its early stopping. These cases are also scored on
+# GLASS's splits (GLASS_EVAL_CASES, glass_split): val and test swapped when val is the smaller
+# (ppi_bp), and on the synthetic datasets a fresh random 50/25/25 split per seed, the same
+# splits GLASS's code draws.
+#   "glass_plain" : GLASS's GNN-plain rebuilt faithfully: the graph only, GLASS's own vectors
+#                   as fine-tuned input, GLASS's config file for the dataset (layers, aggregation,
+#                   dropout, pooling, jumping knowledge), and the recipe. Real datasets only
+#   "edge_label_recipe": edge_label's best config trained with the recipe; the grid tries
+#                   its own readout or GLASS's pooling, and its own input or GLASS's vectors
+#   "copies_recipe": copies_skip_tune's best config with the rest of the recipe fixed and two
+#                   grid axes: own or GLASS's batch size, own readout or GLASS's pooling. Synthetic only
+# member_copies, edge_label, copies_plus, copies_skip and copies_skip_fix use RGCN whatever pool's backbone: RGAT's softmax can only average,
 # and counting edges is their point.
 # Only pool runs the full hyperparameter search. The other ones start from pool's best config
 # for the dataset with the readout swapped (the clique cases keep pool's readout), grid-search
 # only their small grid (small_grid; one seed per point), then retrain the best point over the seeds.
 CASES = ["pool", "transformer", "extra_node", "hub_graph", "clique_sym", "clique_sym_w", "no_clique",
-         "gin_ft", "member_copies", "edge_label"]
+         "gin_ft", "member_copies", "edge_label", "copies_plus", "copies_skip", "plain_gnn",
+         "plain_gnn_fix", "copies_skip_fix", "plain_gnn_glass", "copies_glass", "edge_label_glass",
+         "copies_skip_tune", "glass_plain", "edge_label_recipe", "copies_recipe"]
+GLASS_INPUT_CASES = ("plain_gnn_glass", "copies_glass", "edge_label_glass")
+RECIPE_CASES = ("glass_plain", "edge_label_recipe", "copies_recipe")
+GLASS_EVAL_CASES = RECIPE_CASES  # scored on GLASS's splits (glass_split)
+# GLASS's config/<name>.yml (github.com/Xi-yuanWang/GLASS). resi is the lr decay factor;
+# component has none, so it takes test()'s default 0.7. Its code also defaults jk to on.
+GLASS_CONFIGS = {
+    "ppi_bp": {"hidden_dim": 64, "aggr": "mean", "batch_size": 80, "conv_layer": 2, "dropout": 0.5, "lr": 5e-4, "pool": "sum",
+               "resi": 0.2},
+    "hpo_metab": {"hidden_dim": 64, "aggr": "gcn", "batch_size": 59, "conv_layer": 1, "dropout": 0.5, "lr": 1e-3, "pool": "sum",
+                  "resi": 0.2},
+    "hpo_neuro": {"hidden_dim": 64, "aggr": "gcn", "batch_size": 99, "conv_layer": 2, "dropout": 0.5, "lr": 2e-3, "pool": "sum",
+                  "resi": 0.2},
+    "em_user": {"hidden_dim": 64, "aggr": "gcn", "batch_size": 6, "conv_layer": 1, "dropout": 0.5, "lr": 1e-3, "pool": "size",
+                "resi": 0.7},
+    "density": {"hidden_dim": 8, "aggr": "sum", "batch_size": 2, "conv_layer": 1, "dropout": 0.0, "lr": 1e-3, "pool": "size",
+                "resi": 0.9},
+    "cut_ratio": {"hidden_dim": 8, "aggr": "sum", "batch_size": 3, "conv_layer": 1, "dropout": 0.3, "lr": 1e-2, "pool": "mean",
+                  "resi": 0.9},
+    "coreness": {"hidden_dim": 20, "aggr": "sum", "batch_size": 2, "conv_layer": 2, "dropout": 0.05, "lr": 6.7e-3, "pool": "mean",
+                 "resi": 0.9},
+    "component": {"hidden_dim": 17, "aggr": "sum", "batch_size": 8, "conv_layer": 1, "dropout": 0.0, "lr": 1e-3, "pool": "sum",
+                  "resi": 0.7}}
+GLASS_HIDDEN = 64  # GLASS's hidden size on the real datasets, the size of its pretrained vectors
+# GLASS's ReduceLROnPlateau (default patience 10, on the training loss) and epoch cap
+GLASS_LR_PATIENCE, GLASS_MIN_LR, GLASS_MAX_EPOCHS = 10, 5e-5, 300
+
+
+def glass_recipe(name):
+    """The recipe's hps for a dataset, from GLASS's config (readout = GLASS's pooling)."""
+    cfg = GLASS_CONFIGS[name]
+    return {"batch_size": cfg["batch_size"], "lr": cfg["lr"], "lr_on": "train", "lr_factor": cfg["resi"],
+            "glass_stop": True, "norm": "graph", "input_norm": "graph", "input_dropout": cfg["dropout"],
+            "msg_dropout": cfg["dropout"], "readout": cfg["pool"], "color_mlp_hidden_dims": 0}
 CASE_READOUTS = {"pool": ["multistat", "gated_attn"],  # the only winners of the first run
                  "transformer": ["transformer"], "extra_node": ["extra_node"], "hub_graph": ["hub_graph"],
                  "clique_sym": None, "clique_sym_w": None, "no_clique": None,  # None: pool's own best readout
-                 "gin_ft": None, "member_copies": None, "edge_label": None}
-REAL_ONLY_CASES = ("gin_ft",)
-COUNTING_CASES = ("member_copies", "edge_label")  # forced to RGCN
+                 "gin_ft": None, "member_copies": None, "edge_label": None, "copies_plus": None,
+                 "copies_skip": None, "plain_gnn": None, "plain_gnn_fix": None, "copies_skip_fix": None,
+                 "plain_gnn_glass": None, "copies_glass": None, "edge_label_glass": None,
+                 "copies_skip_tune": None, "glass_plain": None, "edge_label_recipe": None,
+                 "copies_recipe": None}
+REAL_ONLY_CASES = ("gin_ft", "plain_gnn", "plain_gnn_fix", "glass_plain", "edge_label_recipe") + GLASS_INPUT_CASES
+SYNTHETIC_ONLY_CASES = ("copies_skip_tune", "copies_recipe")
+COUNTING_CASES = ("member_copies", "edge_label", "copies_plus", "copies_skip", "copies_skip_fix")  # forced to RGCN
+# The case whose best config each case starts from (default pool)
+BASE_CASE = {"copies_skip": "copies_plus", "plain_gnn_fix": "plain_gnn", "copies_skip_fix": "copies_skip",
+             "plain_gnn_glass": "plain_gnn_fix", "copies_glass": "copies_skip_fix",
+             "edge_label_glass": "edge_label", "copies_skip_tune": "copies_skip_fix",
+             "edge_label_recipe": "edge_label", "copies_recipe": "copies_skip_tune"}
+TRAIN_FIX_CASES = ("plain_gnn_fix", "copies_skip_fix", "copies_skip_tune")
+# GLASS's GNN-plain (its appendix A.10): hidden 64, dropout 0.5, fine-tuned pretrained input
+PLAIN_GNN_HPS = {"backbone": "rgcn", "gnn_embedding_dim": 64, "gnn_hidden_dim": 64, "gnn_dropout_rate": 0.5,
+                 "gnn_mlp_hidden_dims": 64, "mlp_dropout_rate": 0.5, "color_mlp_hidden_dims": 64,
+                 "weight_decay": 0.0, "node_input": "gin_ft", "feature_norm": "standardize",
+                 "clique_norm": "none", "node_loss_weight": 0.0}
+GIN_CAT_LEARNED_DIM = 64  # the learned part of gin_cat, when pool's input had no size of its own
 # pool is "mean", the default; "none" drops the clique relation
 CLIQUE_NORMS = {"clique_sym": "sym", "clique_sym_w": "sym_w", "no_clique": "none"}
 SUPERNODE_READOUTS = ("supernode", "extra_node", "hub_graph")  # the color head reads an extra node
@@ -170,14 +270,39 @@ SMALL_SEARCH = {"transformer": {"lr": [1e-3, 3e-3], "pma_sabs": [1, 2], "attn_po
                 "gin_ft": {"lr": [1e-3, 3e-3, 1e-2], "gnn_dropout_rate": [0.2, 0.5]},
                 # copy_clique: also keep our clique, among the copies of each subgraph
                 "member_copies": {"lr": [1e-3, 3e-3, 1e-2], "copy_clique": [False, True]},
-                "edge_label": {"lr": [1e-3, 3e-3, 1e-2]}}
+                "edge_label": {"lr": [1e-3, 3e-3, 1e-2]},
+                # readout and, on the real datasets, node_input are added by small_grid
+                "copies_plus": {"lr": [1e-3, 3e-3, 1e-2]},
+                "copies_skip": {"lr": [1e-3, 3e-3, 1e-2]},
+                # GLASS searched lr 1e-4..5e-3, 1-2 layers, mean/sum/gcn aggregation, mean/sum/max/size pool
+                "plain_gnn": {"lr": [1e-3, 5e-3], "k_gnn_layers": [1, 2], "graph_agg": ["mean", "gcn"],
+                              "readout": ["mean", "multistat"]},
+                # n_batches: train subgraphs per epoch split into this many steps (GLASS: 10-80)
+                "plain_gnn_fix": {"norm": ["batch", "layer"], "n_batches": [1, 10]},
+                "copies_skip_fix": {"norm": ["batch", "layer"], "n_batches": [1, 10]},
+                "plain_gnn_glass": {"lr": [1e-3, 5e-3], "gnn_dropout_rate": [0.2, 0.5], "k_gnn_layers": [1, 2],
+                                    "norm": ["batch", "layer"]},
+                # hpo_metab takes ~10 min a run here, so this grid stays small
+                "copies_glass": {"lr": [1e-3, 3e-3], "gnn_dropout_rate": [0.0, 0.5]},
+                "edge_label_glass": {"norm": [None, "batch", "layer"], "lr": [1e-3, 3e-3],
+                                     "gnn_dropout_rate": [0.0, 0.5]},
+                "copies_skip_tune": {"lr": [1e-3, 3e-3, 1e-2], "k_gnn_layers": [1, 2, 3],
+                                     "gnn_dropout_rate": [0.0, 0.2], "norm": ["batch", "layer"]},
+                # The recipe grids depend on the dataset's base config and GLASS's; small_grid fills them
+                "glass_plain": {}, "edge_label_recipe": {}, "copies_recipe": {}}
 POOL_ONLY_HPS = ["attn_pool_hidden_dim", "attn_pool_dropout"]  # gated attention's own settings
 # Each case gets its own results folder; pool is the v2 run, so it keeps that folder
 CASE_DIRS = {"pool": "gpen_compare_v2", "transformer": "gpen_compare_transformer",
              "extra_node": "gpen_compare_extra_node", "hub_graph": "gpen_compare_hub_graph",
              "clique_sym": "gpen_compare_clique_sym", "clique_sym_w": "gpen_compare_clique_sym_w",
              "no_clique": "gpen_compare_no_clique", "gin_ft": "gpen_compare_gin_ft",
-             "member_copies": "gpen_compare_member_copies", "edge_label": "gpen_compare_edge_label"}
+             "member_copies": "gpen_compare_member_copies", "edge_label": "gpen_compare_edge_label",
+             "copies_plus": "gpen_compare_copies_plus", "copies_skip": "gpen_compare_copies_skip",
+             "plain_gnn": "gpen_compare_plain_gnn", "plain_gnn_fix": "gpen_compare_plain_gnn_fix",
+             "copies_skip_fix": "gpen_compare_copies_skip_fix", "plain_gnn_glass": "gpen_compare_plain_gnn_glass",
+             "copies_glass": "gpen_compare_copies_glass", "edge_label_glass": "gpen_compare_edge_label_glass",
+             "copies_skip_tune": "gpen_compare_copies_skip_tune", "glass_plain": "gpen_compare_glass_plain",
+             "edge_label_recipe": "gpen_compare_edge_label_recipe", "copies_recipe": "gpen_compare_copies_recipe"}
 MIN_EPOCHS, PATIENCE = 200, 150
 LR_FACTOR, LR_PATIENCE, MIN_LR = 0.5, 30, 1e-5
 
@@ -218,6 +343,9 @@ def load_dataset(name, data_root):
         n_nodes = int(max(edges.max(), max(s.max() for s in subgraphs))) + 1
         for key, fname in PRETRAINED.items():
             path = join(d, fname)
+            if key == "glass" and not os.path.exists(path):
+                # em_user's GLASS vectors were never copied over; read them from the GLASS clone
+                path = join("external", "GLASS", "Emb", f"{name}_64.pt")
             if os.path.exists(path):
                 # Some of these were saved with requires_grad set
                 feat = torch.load(path, map_location="cpu").detach().float()
@@ -263,11 +391,11 @@ def inside_edge_mask(edges, same_sub_edges, n_nodes):
 
 def build_copy_edges(subgraphs, graph_edges, n_nodes):
     """
-    member_copies' relations among the copies. Copy r (row r of the membership
-    list, i.e. one (node, subgraph) pair) is node n_nodes + r. Rows are grouped
-    by subgraph, in the order of `subgraphs`.
-    :return: (inside [2, E_in]: copies of one subgraph whose nodes are graph
-              neighbors, clique [2, E_cl]: every pair of copies of one subgraph),
+    member_copies' relations among the copies, in membership rows (row r is one
+    (node, subgraph) pair; rows are grouped by subgraph, in the order of
+    `subgraphs`). copy_rows maps the rows to graph ids.
+    :return: (inside [2, E_in]: rows of one subgraph whose nodes are graph
+              neighbors, clique [2, E_cl]: every pair of rows of one subgraph),
               each unordered pair once
     """
     graph_keys = torch.unique(torch.minimum(graph_edges[0], graph_edges[1]) * n_nodes
@@ -287,8 +415,62 @@ def build_copy_edges(subgraphs, graph_edges, n_nodes):
     member_node = torch.from_numpy(np.concatenate(subgraphs))
     a, b = member_node[ri], member_node[rj]
     is_edge = torch.isin(torch.minimum(a, b) * n_nodes + torch.maximum(a, b), graph_keys)
-    clique = torch.stack([ri, rj]) + n_nodes
+    clique = torch.stack([ri, rj])
     return clique[:, is_edge], clique
+
+
+def copy_rows(member_node, n_nodes, copy_all=False):
+    """
+    The graph id of each membership row's copy: a new node n_nodes + k for a
+    shared node (in two or more subgraphs), the node itself otherwise.
+    copy_all gives every row a new node, as in runs 5-10.
+    :return: (rep [number of memberships], shared [number of memberships] bool)
+    """
+    if copy_all:
+        shared = torch.ones(member_node.numel(), dtype=torch.bool)
+    else:
+        shared = torch.bincount(member_node, minlength=n_nodes)[member_node] >= 2
+    rep = member_node.clone()
+    rep[shared] = n_nodes + torch.arange(int(shared.sum()))
+    return rep, shared
+
+
+def copy_counts(inside, graph_edges, member_node, n_nodes):
+    """
+    copies_plus' input counts: each copy's graph edges inside its own subgraph,
+    and the rest of its node's edges (outside), log1p and standardized.
+    :param inside: inside edges in membership rows (build_copy_edges)
+    :return: [number of memberships, 2] float tensor
+    """
+    n_members = member_node.numel()
+    in_deg = torch.bincount(torch.cat([inside[0], inside[1]]), minlength=n_members).float()
+    deg = torch.bincount(torch.cat([graph_edges[0], graph_edges[1]]), minlength=n_nodes).float()
+    x = torch.stack([in_deg.log1p(), (deg[member_node] - in_deg).log1p()], dim=1)
+    return (x - x.mean(0)) / x.std(0).clamp(min=1e-6)
+
+
+def subgraph_counts(inside, graph_edges, member_node, member_sub, n_nodes, n_subs):
+    """
+    copies_skip's per-subgraph counts: size, graph edges inside, and graph edges
+    leaving it (cut_ratio's numerator), log1p and standardized.
+    :return: [n_subs, 3] float tensor
+    """
+    n_members = member_node.numel()
+    in_deg = torch.bincount(torch.cat([inside[0], inside[1]]), minlength=n_members).float()
+    deg = torch.bincount(torch.cat([graph_edges[0], graph_edges[1]]), minlength=n_nodes).float()
+    size = torch.bincount(member_sub, minlength=n_subs).float()
+    # Each inside edge is counted at both of its ends
+    inside_edges = torch.zeros(n_subs).index_add_(0, member_sub, in_deg) / 2
+    outside_edges = torch.zeros(n_subs).index_add_(0, member_sub, deg[member_node] - in_deg)
+    x = torch.stack([size, inside_edges, outside_edges], dim=1).log1p()
+    return (x - x.mean(0)) / x.std(0).clamp(min=1e-6)
+
+
+def graph_gcn_weights(graph_edges, n_nodes):
+    """plain_gnn's GCN aggregation: 1 / sqrt(d_a d_b) per graph edge, summed. :return: [E]"""
+    a, b = graph_edges
+    deg = torch.bincount(torch.cat([a, b]), minlength=n_nodes).float()
+    return (deg[a] * deg[b]).rsqrt()
 
 
 def structural_features(edges, same_sub_edges, member_node, n_nodes):
@@ -376,6 +558,48 @@ def build_hub_edges(graph_edges, member_node, member_sub, n_nodes, n_subs, top_k
     return torch.from_numpy(pairs.T.copy()) + n_nodes, weights
 
 
+def split_node_targets(split, y_hot, member_node, member_sub, n_nodes):
+    """
+    Node-head targets, per split: the mean label of that split's subgraphs that
+    contain the node. Soft class distribution (multi-class) or per-class
+    frequency (multi-label).
+    :return: ({split: [n_nodes, n_classes] targets}, {split: [n_nodes] bool mask})
+    """
+    node_targets, node_masks = {}, {}
+    for s in SPLITS.values():
+        sel = split[member_sub] == s
+        t = torch.zeros(n_nodes, y_hot.size(1)).index_add_(0, member_node[sel], y_hot[member_sub[sel]])
+        cnt = torch.bincount(member_node[sel], minlength=n_nodes)
+        node_targets[s] = t / cnt.clamp(min=1).unsqueeze(1).float()
+        node_masks[s] = cnt > 0
+    return node_targets, node_masks
+
+
+def glass_split(prep, name, repeat):
+    """
+    prep on the split GLASS's code scores repeat `repeat` on. Real datasets: the
+    shipped split, with val and test swapped when val is the smaller (its loader
+    does this; only ppi_bp, 159 vs 160). Synthetic: GLASS ignores the shipped
+    split and draws 50% train / 25% val / 25% test per repeat, as the first
+    random call after seeding torch with 2^repeat - 1, so this reproduces its
+    exact splits.
+    :return: a shallow copy of prep with split and the node-head targets replaced
+    """
+    split = prep["split"].clone()
+    if name in REAL:
+        if (split == 1).sum() < (split == 2).sum():
+            split = torch.where(split == 1, 2, torch.where(split == 2, 1, split))
+    else:
+        cnt = split.numel()
+        base = torch.cat([torch.zeros(cnt - cnt // 2, dtype=torch.long), torch.ones(cnt // 4, dtype=torch.long),
+                          2 * torch.ones(cnt // 2 - cnt // 4, dtype=torch.long)])
+        torch.manual_seed((1 << repeat) - 1)
+        split = base[torch.randperm(cnt)]
+    node_targets, node_masks = split_node_targets(split, prep["y_hot"], prep["member_node"], prep["member_sub"],
+                                                  prep["n_nodes"])
+    return {**prep, "split": split, "node_targets": node_targets, "node_masks": node_masks}
+
+
 def prepare(ds):
     """Turn a loaded dataset into the tensors training needs. Done once per run."""
     classes = sorted(set().union(*ds["labels"]))
@@ -392,17 +616,7 @@ def prepare(ds):
                             for i, s in enumerate(ds["subgraphs"])])
     member_node = torch.from_numpy(np.concatenate(ds["subgraphs"]))
     split = torch.from_numpy(ds["split"])
-
-    # Node-head targets, per split: the mean label of that split's subgraphs that
-    # contain the node. Soft class distribution (multi-class) or per-class
-    # frequency (multi-label).
-    node_targets, node_masks = {}, {}
-    for s in SPLITS.values():
-        sel = split[member_sub] == s
-        t = torch.zeros(n_nodes, n_classes).index_add_(0, member_node[sel], y_hot[member_sub[sel]])
-        cnt = torch.bincount(member_node[sel], minlength=n_nodes)
-        node_targets[s] = t / cnt.clamp(min=1).unsqueeze(1).float()
-        node_masks[s] = cnt > 0
+    node_targets, node_masks = split_node_targets(split, y_hot, member_node, member_sub, n_nodes)
 
     same_sub_edges = build_same_subgraph_edges(ds["subgraphs"], n_nodes)
     struct = structural_features(ds["edges"], same_sub_edges, member_node, n_nodes)
@@ -410,12 +624,12 @@ def prepare(ds):
     supernode_edges = torch.stack([member_node, n_nodes + member_sub])
 
     return {"n_nodes": n_nodes, "n_subs": n_subs, "n_classes": n_classes, "classes": classes,
-            "multilabel": multilabel, "y": y, "split": split,
+            "multilabel": multilabel, "y": y, "y_hot": y_hot, "split": split,
             "member_node": member_node, "member_sub": member_sub,
             "node_targets": node_targets, "node_masks": node_masks,
             "graph_edges": ds["edges"], "same_sub_edges": same_sub_edges,
             "supernode_edges": supernode_edges, "member_pairs": None, "hub_edges": {},
-            "copy_edges": None, "graph_inside": None,  # built on first use
+            "copy_edges": None, "graph_inside": None, "edge_kinds": {},  # built on first use
             "subgraphs": ds["subgraphs"], "clique_weights": {},
             "features": ds["features"], "struct": struct,
             "stats": {"n_nodes": n_nodes, "n_graph_edges": ds["edges"].size(1),
@@ -434,6 +648,8 @@ def build_relations(prep, hps):
               sum_relations: relation ids RGCN sums instead of averaging)
     """
     readout = hps["readout"]
+    if hps.get("coloring"):
+        return build_colored_relations(prep, hps)
     if hps.get("copies"):
         return build_copy_relations(prep, hps)
     clique_norm = hps.get("clique_norm", "mean")
@@ -447,6 +663,9 @@ def build_relations(prep, hps):
         rel_edges = [prep["graph_edges"][:, ~inside], prep["graph_edges"][:, inside]]
         rel_weights = [None, None]
         sum_relations = [1]
+    elif hps.get("graph_agg") == "gcn":
+        rel_weights = [graph_gcn_weights(prep["graph_edges"], prep["n_nodes"])]
+        sum_relations = [0]
     if clique_norm != "none" and (not extra_node or (readout == "supernode" and hps["keep_same_color"])):
         rel_edges.append(prep["same_sub_edges"])
         if clique_norm == "mean":
@@ -475,23 +694,185 @@ def build_relations(prep, hps):
     return torch.cat(rel_edges, dim=1), torch.cat(rel_types), len(rel_edges), weights, sum_relations
 
 
+def outside_copy_edges(graph_edges, member_node, member_sub, rep, n_nodes):
+    """
+    The graph edges once the shared nodes are replaced by their copies: edge u-v
+    joins every copy of u to every copy of v (a node that is not shared is its
+    own single copy), and is kept here unless the two copies are of one subgraph
+    (those are the inside edges).
+    :return: [2, E_out]
+    """
+    # One entry per (node, its copy, the copy's subgraph): the membership rows, plus the
+    # nodes in no subgraph (subgraph -1)
+    plain = (torch.bincount(member_node, minlength=n_nodes) == 0).nonzero(as_tuple=True)[0]
+    ent_node = torch.cat([member_node, plain])
+    ent_rep = torch.cat([rep, plain])
+    ent_sub = torch.cat([member_sub, torch.full((plain.numel(),), -1, dtype=torch.long)])
+    order = torch.argsort(ent_node, stable=True)
+    ent_node, ent_rep, ent_sub = ent_node[order], ent_rep[order], ent_sub[order]
+    cnt = torch.bincount(ent_node, minlength=n_nodes)
+    ptr = torch.cumsum(cnt, 0) - cnt
+    # Every (entry of u, entry of v) pair of every edge
+    u, v = graph_edges
+    n_pairs = cnt[u] * cnt[v]
+    edge = torch.repeat_interleave(torch.arange(u.numel()), n_pairs)
+    k = torch.arange(int(n_pairs.sum())) - torch.repeat_interleave(torch.cumsum(n_pairs, 0) - n_pairs, n_pairs)
+    eu = ptr[u[edge]] + k // cnt[v[edge]]
+    ev = ptr[v[edge]] + k % cnt[v[edge]]
+    inside = (ent_sub[eu] == ent_sub[ev]) & (ent_sub[eu] >= 0)
+    return torch.stack([ent_rep[eu[~inside]], ent_rep[ev[~inside]]])
+
+
+def sibling_copy_edges(member_node, rep, shared):
+    """Every pair of copies of one shared node, each unordered pair once. :return: [2, E_sib]"""
+    node, copy = member_node[shared], rep[shared]
+    order = torch.argsort(node, stable=True)
+    node, copy = node[order], copy[order]
+    first, second = [], []
+    for start, k in zip((torch.cumsum(torch.bincount(node), 0) - torch.bincount(node)).tolist(),
+                        torch.bincount(node).tolist()):
+        if k >= 2:
+            i, j = torch.triu_indices(k, k, offset=1)
+            first.append(copy[start + i])
+            second.append(copy[start + j])
+    if not first:
+        return torch.empty(2, 0, dtype=torch.long)
+    return torch.stack([torch.cat(first), torch.cat(second)])
+
+
 def build_copy_relations(prep, hps):
     """
-    member_copies' relations, over n_nodes + (number of memberships) nodes: the
-    graph (mean), each node to its copies (mean), copies of one subgraph that are
-    graph neighbors (summed), and with copy_clique every pair of copies of one
-    subgraph (mean). Same return as build_relations.
+    member_copies' relations. A shared node (in two or more subgraphs) is
+    replaced by its copies, one per subgraph, each with all of the node's graph
+    edges: outside edges (mean), inside edges to the copies of the same
+    subgraph (summed), and sibling edges between the copies of one node (mean);
+    with copy_clique also every pair of copies of one subgraph (mean). The
+    shared node's own row keeps no edges.
+    copy_all (runs 5-10): every member gets a copy next to its node: the graph
+    (mean), each node to its copies (mean), inside edges among the copies
+    (summed), and the copy clique. Same return as build_relations.
     """
-    n_nodes, n_members = prep["n_nodes"], prep["member_node"].numel()
+    n_nodes, member_node = prep["n_nodes"], prep["member_node"]
     if prep["copy_edges"] is None:
         prep["copy_edges"] = build_copy_edges(prep["subgraphs"], prep["graph_edges"], n_nodes)
     inside, clique = prep["copy_edges"]
-    copy_links = torch.stack([prep["member_node"], n_nodes + torch.arange(n_members)])
-    rel_edges = [prep["graph_edges"], copy_links, inside]
+    copy_all = hps.get("copy_all", False)
+    rep, shared = copy_rows(member_node, n_nodes, copy_all)
+    if copy_all:
+        copy_links = torch.stack([member_node[shared], rep[shared]])
+        rel_edges, sum_relations = [prep["graph_edges"], copy_links, rep[inside]], [2]
+    else:
+        if prep.get("outside_copy_edges") is None:
+            prep["outside_copy_edges"] = outside_copy_edges(prep["graph_edges"], member_node, prep["member_sub"],
+                                                            rep, n_nodes)
+        rel_edges, sum_relations = [prep["outside_copy_edges"], rep[inside],
+                                    sibling_copy_edges(member_node, rep, shared)], [1]
     if hps["copy_clique"]:
-        rel_edges.append(clique)
+        rel_edges.append(rep[clique])
     rel_types = [torch.full((e.size(1),), r, dtype=torch.long) for r, e in enumerate(rel_edges)]
-    return torch.cat(rel_edges, dim=1), torch.cat(rel_types), len(rel_edges), None, [2]
+    return torch.cat(rel_edges, dim=1), torch.cat(rel_types), len(rel_edges), None, sum_relations
+
+
+# The edge kinds of the copies graph (copy_edge_kinds), then of the graph without copies
+# (graph_edge_kinds); "I", "O" and "G" in a coloring stand for both of theirs
+EDGE_KINDS = ("Icopy", "Iplain", "Osub", "Onone", "Oin", "Oout", "S", "C")
+GRAPH_KINDS = ("Gin", "Gout")
+KIND_GROUPS = {"I": ("Icopy", "Iplain"), "O": ("Osub", "Onone"), "G": ("Gin", "Gout")}
+
+
+def graph_edge_kinds(prep, kinds):
+    """
+    The dataset's own graph, no copies: Gin the edges whose two ends share a
+    subgraph (edge_label's inside edges), Gout the rest. Directed edge lists, as
+    in copy_edge_kinds.
+    :return: dict kind -> [2, E]
+    """
+    edges = prep["graph_edges"]
+    inside = inside_edge_mask(edges, prep["same_sub_edges"], prep["n_nodes"])
+    out = {"Gin": edges[:, inside], "Gout": edges[:, ~inside]}
+    return {k: torch.cat([out[k], out[k].flip(0)], dim=1) for k in kinds}
+
+
+def copy_edge_kinds(prep, kinds):
+    """
+    The graph once every shared node is replaced by its copies (as in
+    build_copy_relations), its edges sorted into kinds, in graph ids (copy_rows):
+      Icopy / Iplain: inside edges that touch a copy / that join two nodes that are no copy
+      Osub / Onone  : outside edges between members of two subgraphs / with an end in no subgraph
+      Oin / Oout    : the outside edges' messages, by whether the receiver is in a subgraph
+      S             : sibling edges, between two copies of one node
+      C             : every pair of members (nodes or copies) of one subgraph, our clique
+    Every kind is a directed edge list, an undirected edge in both directions.
+    :param kinds: the kinds to build
+    :return: dict kind -> [2, E]
+    """
+    n_nodes, member_node = prep["n_nodes"], prep["member_node"]
+    rep, shared = copy_rows(member_node, n_nodes)
+    if prep["copy_edges"] is None:
+        prep["copy_edges"] = build_copy_edges(prep["subgraphs"], prep["graph_edges"], n_nodes)
+    inside, clique = prep["copy_edges"]
+
+    def both_ways(e):
+        return torch.cat([e, e.flip(0)], dim=1)
+
+    out = {}
+    if kinds & {"Icopy", "Iplain"}:
+        touches_copy = shared[inside[0]] | shared[inside[1]]
+        out["Icopy"] = both_ways(rep[inside[:, touches_copy]])
+        out["Iplain"] = both_ways(rep[inside[:, ~touches_copy]])
+    if kinds & {"Osub", "Onone", "Oin", "Oout"}:
+        if prep.get("outside_copy_edges") is None:
+            prep["outside_copy_edges"] = outside_copy_edges(prep["graph_edges"], member_node, prep["member_sub"],
+                                                            rep, n_nodes)
+        outside = prep["outside_copy_edges"]
+        is_member = torch.zeros(n_nodes + int(shared.sum()), dtype=torch.bool)
+        is_member[rep] = True
+        both_members = is_member[outside[0]] & is_member[outside[1]]
+        out["Osub"] = both_ways(outside[:, both_members])
+        out["Onone"] = both_ways(outside[:, ~both_members])
+        messages = both_ways(outside)
+        out["Oin"] = messages[:, is_member[messages[1]]]
+        out["Oout"] = messages[:, ~is_member[messages[1]]]
+    if "S" in kinds:
+        out["S"] = both_ways(sibling_copy_edges(member_node, rep, shared))
+    if "C" in kinds:
+        out["C"] = both_ways(rep[clique])
+    return {k: out[k] for k in kinds}
+
+
+def directed_gcn_weights(edges):
+    """GCN's D^-1/2 A D^-1/2 for one directed relation: 1 / sqrt(out-degree(src) in-degree(dst)). :return: [E]"""
+    if edges.numel() == 0:
+        return torch.empty(0)
+    n = int(edges.max()) + 1
+    out_deg = torch.bincount(edges[0], minlength=n).float()
+    in_deg = torch.bincount(edges[1], minlength=n).float()
+    return (out_deg[edges[0]] * in_deg[edges[1]]).rsqrt()
+
+
+def build_colored_relations(prep, hps):
+    """
+    run_edge_colors' relations: one relation per color of hps["coloring"], a list
+    of colors, each a list of edge kinds (copy_edge_kinds, or graph_edge_kinds for
+    the graph without copies, hps["copies"] off); a kind in no color is left out of
+    the graph. The edges are directed lists, so the GNN runs directed.
+    graph_agg: "mean" within each relation, "sum", or "gcn" (D^-1/2 A D^-1/2
+    within each relation, summed). The kinds are cached in prep["edge_kinds"].
+    Same return as build_relations.
+    """
+    colors = [[k for name in color for k in KIND_GROUPS.get(name, (name,))] for color in hps["coloring"]]
+    cache = prep["edge_kinds"]
+    missing = {k for color in colors for k in color} - set(cache)
+    if missing & set(GRAPH_KINDS):
+        cache.update(graph_edge_kinds(prep, missing & set(GRAPH_KINDS)))
+    if missing - set(GRAPH_KINDS):
+        cache.update(copy_edge_kinds(prep, missing - set(GRAPH_KINDS)))
+    rel_edges = [torch.cat([cache[k] for k in color], dim=1) for color in colors]
+    agg = hps.get("graph_agg", "mean")
+    sum_relations = list(range(len(rel_edges))) if agg in ("sum", "gcn") else []
+    weights = torch.cat([directed_gcn_weights(e) for e in rel_edges]) if agg == "gcn" else None
+    rel_types = [torch.full((e.size(1),), r, dtype=torch.long) for r, e in enumerate(rel_edges)]
+    return torch.cat(rel_edges, dim=1), torch.cat(rel_types), len(rel_edges), weights, sum_relations
 
 
 def node_input_choices(prep):
@@ -501,28 +882,63 @@ def node_input_choices(prep):
 
 def build_input(prep, hps):
     """
-    :return: (x, module, in_dim). Exactly one of x (a fixed tensor) and module
-             (an nn.Embedding whose weight is the input) is not None.
+    :return: (x, module, in_dim). x is a fixed tensor, module an nn.Embedding
+             whose weight is the input; with both (gin_cat) the input is [x, weight].
     """
     kind, n = hps["node_input"], prep["n_nodes"]
-    if kind == "learned":
+    if kind in ("learned", "gin_cat"):
         emb = nn.Embedding(n, hps["node_input_dim"])
         nn.init.normal_(emb.weight, std=0.1)
-        return None, emb, hps["node_input_dim"]
+        if kind == "learned":
+            return None, emb, hps["node_input_dim"]
     if kind == "struct":
         return prep["struct"], None, prep["struct"].size(1)
-    # gin_ft: the GIN vectors as the starting point of a trainable input
-    pretrained = "gin" if kind == "gin_ft" else kind
+    # <name>_ft: those pretrained vectors as the starting point of a trainable input
+    pretrained = "gin" if kind == "gin_cat" else kind.removesuffix("_ft")
     # Pretrained embeddings are unsupervised, so the norm statistics may use every node
     x = normalize_features(prep["features"][pretrained], torch.ones(n, dtype=torch.bool),
                            hps.get("feature_norm", "standardize"))
-    if kind == "gin_ft":
+    if kind.endswith("_ft"):
         return None, nn.Embedding.from_pretrained(x.clone(), freeze=False), x.size(1)
+    if kind == "gin_cat":
+        return x, emb, x.size(1) + hps["node_input_dim"]
     return x, None, x.size(1)
+
+
+class SumReadout(nn.Module):
+    """GLASS's sum pooling, or with size_norm its "size" pooling: the sum divided by sqrt(subgraph size)."""
+
+    def __init__(self, dim, size_norm=False):
+        super().__init__()
+        self.out_dim = dim
+        self.size_norm = size_norm
+
+    def forward(self, h, color_indices, n_colors):
+        out = torch.zeros(n_colors, h.size(1), device=h.device, dtype=h.dtype).index_add_(0, color_indices, h)
+        if self.size_norm:
+            out = out / torch.bincount(color_indices, minlength=n_colors).clamp(min=1).sqrt().unsqueeze(1)
+        return out
+
+
+class MaxReadout(nn.Module):
+    """GLASS's max pooling: the elementwise max over a subgraph's members."""
+
+    def __init__(self, dim):
+        super().__init__()
+        self.out_dim = dim
+
+    def forward(self, h, color_indices, n_colors):
+        index = color_indices.unsqueeze(1).expand_as(h)
+        return torch.zeros(n_colors, h.size(1), device=h.device, dtype=h.dtype).scatter_reduce(
+            0, index, h, reduce="amax", include_self=False)
 
 
 def make_gpen_readout(readout, dim, hps):
     """train09's modules: the transformer is its PMA, the extra node its supernode (no module)."""
+    if readout in ("sum", "size"):
+        return SumReadout(dim, size_norm=readout == "size")
+    if readout == "max":
+        return MaxReadout(dim)
     base = {"transformer": "pma", "extra_node": "supernode", "hub_graph": "supernode"}.get(readout, readout)
     return make_readout(base, dim, hps)
 
@@ -542,13 +958,34 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
     # The color head reads the extra node of each subgraph (train09's supernode)
     supernode = readout in SUPERNODE_READOUTS
     attention_pool = readout in ("pma", "transformer")
-    # member_copies: rows n_nodes.. are the copies, one per membership row
+    # member_copies: rows n_nodes.. are the copies of the shared nodes; copy_rep[r] is the
+    # graph row of membership r's copy (the node itself when it is in one subgraph)
     copies = bool(hps.get("copies"))
 
     feat, feat_module, feat_dim = build_input(prep, hps)
-    if copies:
-        feat_dim += 1  # the copy flag: 0 on the nodes, 1 on the copies
+    input_dim = feat_dim  # before the copy flag and counts, which the input norm leaves alone
     rel_edge_index, rel_edge_type, num_relations, rel_edge_weight, sum_relations = build_relations(prep, hps)
+    counts = copy_rep = copy_src = replaced = None
+    if copies:
+        copy_rep, shared = copy_rows(prep["member_node"], n_nodes, hps.get("copy_all", False))
+        copy_src = prep["member_node"][shared].to(DEVICE)
+        n_rows = n_nodes + int(shared.sum())
+        # Without copy_all a shared node is replaced by its copies; the node head reads their mean
+        replaced = None
+        if not hps.get("copy_all", False):
+            replaced = (torch.bincount(prep["member_node"], minlength=n_nodes) >= 2).to(DEVICE)
+        feat_dim += 1  # the copy flag: 1 on the copies, 0 elsewhere
+        if hps.get("copy_counts"):
+            # copies_plus: each copy's inside and outside edge counts (zeros on nodes that are no copy)
+            row_counts = copy_counts(prep["copy_edges"][0], prep["graph_edges"], prep["member_node"], n_nodes)
+            counts = torch.zeros(n_rows, 2).index_copy_(0, copy_rep, row_counts).to(DEVICE)
+            feat_dim += 2
+        copy_rep = copy_rep.to(DEVICE)
+    sub_counts = None
+    if hps.get("count_skip"):
+        sub_counts = subgraph_counts(prep["copy_edges"][0], prep["graph_edges"], prep["member_node"],
+                                     prep["member_sub"], n_nodes, n_subs).to(DEVICE)
+    node_loss_weight = hps.get("node_loss_weight", 1.0)
 
     pair_edge_index = None
     if attention_pool and hps["pma_sabs"] > 0:
@@ -560,25 +997,36 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
     modules = {}
     if feat_module is not None:
         modules["node_input"] = feat_module
+    if hps.get("input_norm") == "graph":
+        modules["input_norm"] = GraphNorm(input_dim)
+    # Colored relations come as directed edge lists (build_colored_relations)
+    directed = bool(hps.get("coloring"))
     if backbone == "rgcn":
         modules["gnn"] = RGCN(in_dim=feat_dim, hidden_dim=hps["gnn_hidden_dim"],
                               out_dim=hps["gnn_embedding_dim"], num_relations=num_relations,
-                              num_layers=hps["k_gnn_layers"], dropout=hps["gnn_dropout_rate"],
-                              sum_relations=sum_relations)
+                              num_layers=hps["k_gnn_layers"], dropout=hps["gnn_dropout_rate"], directed=directed,
+                              sum_relations=sum_relations, norm=hps.get("norm"), jk=hps.get("jk", False),
+                              msg_dropout=hps.get("msg_dropout", 0.0))
     else:
         # RGAT has no sum mode: its softmax renormalizes, so the weights only bias the attention
         modules["gnn"] = RGAT(in_dim=feat_dim, hidden_dim=hps["gnn_hidden_dim"],
                               out_dim=hps["gnn_embedding_dim"], num_relations=num_relations,
                               num_layers=hps["k_gnn_layers"], num_heads=hps["num_heads"],
-                              dropout=hps["gnn_dropout_rate"], attn_dropout=hps["gnn_dropout_rate"])
-    modules["node_mlp"] = MLP(input_dim=hps["gnn_embedding_dim"], hidden_dims=[hps["gnn_mlp_hidden_dims"]],
+                              dropout=hps["gnn_dropout_rate"], attn_dropout=hps["gnn_dropout_rate"],
+                              directed=directed, norm=hps.get("norm"), jk=hps.get("jk", False))
+    gnn_out = getattr(modules["gnn"], "out_dim", hps["gnn_embedding_dim"])  # wider with jumping knowledge
+    modules["node_mlp"] = MLP(input_dim=gnn_out, hidden_dims=[hps["gnn_mlp_hidden_dims"]],
                               output_dim=n_classes, dropout_rate=hps["mlp_dropout_rate"])
-    pooling = make_gpen_readout(readout, hps["gnn_embedding_dim"], hps)
+    pooling = make_gpen_readout(readout, gnn_out, hps)
     if pooling is not None:
         modules["readout"] = pooling
     if readout != "node_score_mean":
-        color_in = hps["gnn_embedding_dim"] if supernode else pooling.out_dim
-        modules["color_head"] = MLP(input_dim=color_in, hidden_dims=[hps["color_mlp_hidden_dims"]],
+        color_in = gnn_out if supernode else pooling.out_dim
+        if sub_counts is not None:
+            color_in += sub_counts.size(1)
+        # color_mlp_hidden_dims 0: a single linear layer, GLASS's head
+        hidden = [hps["color_mlp_hidden_dims"]] if hps["color_mlp_hidden_dims"] else []
+        modules["color_head"] = MLP(input_dim=color_in, hidden_dims=hidden,
                                     output_dim=n_classes, dropout_rate=hps["mlp_dropout_rate"])
 
     for m in modules.values():
@@ -603,8 +1051,8 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
 
     # node_score_mean produces probabilities rather than logits (as in train09),
     # so its losses take the log / plain BCE of the pooled probabilities.
-    def color_loss(out, s):
-        idx = sub_idx[s]
+    def color_loss(out, s, idx=None):
+        idx = sub_idx[s] if idx is None else idx
         if readout == "node_score_mean":
             p = out[idx].clamp(1e-6, 1 - 1e-6)
             if multilabel:
@@ -616,18 +1064,45 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
 
     params = [p for m in modules.values() for p in m.parameters()]
     optimizer = torch.optim.AdamW(params, lr=hps.get("lr", LR), weight_decay=hps["weight_decay"])
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=LR_FACTOR,
-                                                           patience=LR_PATIENCE, min_lr=MIN_LR)
+    # lr_on "train": GLASS's decay, on the training loss with its factor and patience
+    lr_on_train = hps.get("lr_on") == "train"
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=hps["lr_factor"] if lr_on_train else LR_FACTOR,
+        patience=GLASS_LR_PATIENCE if lr_on_train else LR_PATIENCE, min_lr=GLASS_MIN_LR if lr_on_train else MIN_LR)
+
+    # batch_size (GLASS's) sets the mini-batches; otherwise n_batches does
+    n_train = len(sub_idx[0])
+    n_batches = -(-n_train // hps["batch_size"]) if hps.get("batch_size") else hps.get("n_batches", 1)
+    min_epochs, patience = MIN_EPOCHS, PATIENCE
+    # GLASS's early stopping: selection starts after 100 / num_div epochs and stops after as
+    # many without a better validation score; num_div = test size / batch size, over 5 on the
+    # synthetic datasets. Only with GLASS's batch size: one full batch would make it wait
+    # past the epoch cap
+    glass_stop = bool(hps.get("glass_stop") and hps.get("batch_size"))
+    if glass_stop:
+        num_div = len(sub_idx[2]) / hps["batch_size"]
+        if prep.get("name") not in REAL:
+            num_div /= 5
+        min_epochs = patience = 100 / num_div
+        epochs = min(epochs, GLASS_MAX_EPOCHS)
 
     def node_x():
         """The GNN input, with the extra node rows appended when the readout needs them."""
-        x = feat if feat_module is None else modules["node_input"].weight
+        if feat_module is None:
+            x = feat
+        elif feat is None:
+            x = modules["node_input"].weight
+        else:
+            x = torch.cat([feat, modules["node_input"].weight], dim=1)  # gin_cat
+        if "input_norm" in modules:
+            x = modules["input_norm"](x)
+        x = F.dropout(x, p=hps.get("input_dropout", 0.0), training=modules["gnn"].training)
         if copies:
             # A copy starts from its node's input; the flag tells the two apart
-            x = torch.cat([x, x[member_node]], dim=0)
+            x = torch.cat([x, x[copy_src]], dim=0)
             flag = torch.zeros(x.size(0), 1, device=x.device)
             flag[n_nodes:] = 1.0
-            return torch.cat([x, flag], dim=1)
+            return torch.cat([x, flag] + ([counts] if counts is not None else []), dim=1)
         if not supernode:
             return x
         if hps["supernode_init"] == "mean":
@@ -639,22 +1114,32 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
     def forward():
         h = modules["gnn"](node_x(), rel_edge_index, rel_edge_type, rel_edge_weight)
         h_nodes = h[:n_nodes] if supernode or copies else h
+        if copies and replaced is not None:
+            h_nodes = torch.where(replaced.unsqueeze(1), scatter_mean(h[n_nodes:], copy_src, n_nodes), h_nodes)
         node_logits = modules["node_mlp"](h_nodes)
 
         if copies:
             # Pool the copies, so each subgraph reads only its own view of a shared node
-            pooled = modules["readout"](h[n_nodes:], member_sub, n_subs)
+            h_copies = h[copy_rep]  # one row per membership, so the member pairs index it directly
+            if attention_pool:
+                pooled = modules["readout"](h_copies, member_sub, n_subs, pair_edge_index)
+            else:
+                pooled = modules["readout"](h_copies, member_sub, n_subs)
+            if sub_counts is not None:
+                pooled = torch.cat([pooled, sub_counts], dim=1)
             color_out = modules["color_head"](pooled)
         elif readout == "node_score_mean":
             node_probs = torch.sigmoid(node_logits) if multilabel else torch.softmax(node_logits, dim=1)
             color_out = scatter_mean(node_probs[member_node], member_sub, n_subs)
         elif supernode:
             color_out = modules["color_head"](h[n_nodes:])
-        elif attention_pool:
-            pooled = modules["readout"](h_nodes[member_node], member_sub, n_subs, pair_edge_index)
-            color_out = modules["color_head"](pooled)
         else:
-            pooled = modules["readout"](h_nodes[member_node], member_sub, n_subs)
+            if attention_pool:
+                pooled = modules["readout"](h_nodes[member_node], member_sub, n_subs, pair_edge_index)
+            else:
+                pooled = modules["readout"](h_nodes[member_node], member_sub, n_subs)
+            if sub_counts is not None:
+                pooled = torch.cat([pooled, sub_counts], dim=1)
             color_out = modules["color_head"](pooled)
         return node_logits, color_out
 
@@ -673,25 +1158,33 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
     # --- Training loop. Stop after PATIENCE epochs without a better validation
     # micro-F1 (ties go to the lower validation loss), never before MIN_EPOCHS.
     # Validation is scored in eval mode, so dropout does not blur the selection.
+    # With glass_stop, epochs before min_epochs are not candidates (GLASS does not score them).
     best_score, unimproved_epochs, best_states = (-1.0, -torch.inf), 0, None
     epoch = 0
     for epoch in range(epochs):
         for m in modules.values():
             m.train()
-        node_logits, color_out = forward()
-        loss = node_loss(node_logits, 0) + color_loss(color_out, 0)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # One step per mini-batch of train subgraphs; the node loss is split evenly over the steps
+        train_losses = []
+        for batch in torch.randperm(n_train, device=DEVICE).chunk(n_batches):
+            node_logits, color_out = forward()
+            loss = (node_loss_weight / n_batches * node_loss(node_logits, 0)
+                    + color_loss(color_out, 0, sub_idx[0][batch]))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            train_losses.append(loss.item())
 
         for m in modules.values():
             m.eval()
         with torch.no_grad():
             node_logits, color_out = forward()
-            val_loss = (node_loss(node_logits, 1) + color_loss(color_out, 1)).item()
+            val_loss = (node_loss_weight * node_loss(node_logits, 1) + color_loss(color_out, 1)).item()
             score = (val_f1(color_out), -val_loss)
-        scheduler.step(val_loss)
+        scheduler.step(float(np.mean(train_losses)) if lr_on_train else val_loss)
 
+        if glass_stop and epoch < min_epochs:
+            continue
         if score > best_score:
             best_score = score
             unimproved_epochs = 0
@@ -699,7 +1192,7 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
                            for name_, m in modules.items()}
         else:
             unimproved_epochs += 1
-        if epoch + 1 >= MIN_EPOCHS and unimproved_epochs >= PATIENCE:
+        if epoch + 1 >= min_epochs and unimproved_epochs >= patience:
             break
 
     # --- Evaluate with the best checkpoint
@@ -879,11 +1372,35 @@ def pool_best_hps(name, case):
     or for the clique cases pool's readout kept and the clique normalization
     set. None if pool has no result.
     """
-    path = join(case_dir("pool"), name, "summary.json")
+    if case == "glass_plain":
+        # Built from GLASS's config alone; GLASS's head is a single linear layer and it has no node head
+        cfg = GLASS_CONFIGS[name]
+        return {"backbone": "rgcn", "gnn_embedding_dim": GLASS_HIDDEN, "gnn_hidden_dim": GLASS_HIDDEN,
+                "k_gnn_layers": cfg["conv_layer"], "gnn_dropout_rate": cfg["dropout"], "gnn_mlp_hidden_dims": 64,
+                "mlp_dropout_rate": 0.0, "weight_decay": 0.0, "node_input": "glass_ft", "feature_norm": "none",
+                "clique_norm": "none", "node_loss_weight": 0.0, "graph_agg": cfg["aggr"], "jk": True,
+                **glass_recipe(name)}
+    path = join(case_dir(BASE_CASE.get(case, "pool")), name, "summary.json")
     if not os.path.exists(path):
         return None
     with open(path) as f:
         hps = json.loads(json.load(f)["hps"])
+    if case == "edge_label_recipe":
+        # The grid sets the readout (own or GLASS's pooling) and the input (own or GLASS's vectors)
+        return {**hps, "backbone": "rgcn", "graph_split": True, **glass_recipe(name), "readout": hps["readout"]}
+    if case == "copies_recipe":
+        # The grid sets the batch size and the readout; the rest of the recipe is fixed
+        recipe = glass_recipe(name)
+        fixed = ("lr_on", "lr_factor", "glass_stop", "norm", "input_norm", "input_dropout", "msg_dropout")
+        return {**hps, **{k: recipe[k] for k in fixed}}
+    if case == "copies_skip":
+        return {**hps, "count_skip": True}
+    if case in TRAIN_FIX_CASES:
+        return hps  # the grid adds the norm and the mini-batches
+    if case in GLASS_INPUT_CASES:
+        return {**hps, "node_input": "glass_ft", "feature_norm": "standardize"}
+    if case == "plain_gnn":
+        return dict(PLAIN_GNN_HPS)  # the grid adds lr, layers, aggregation and readout
     if case in CLIQUE_NORMS:
         return {**hps, "clique_norm": CLIQUE_NORMS[case]}
     if case == "gin_ft":
@@ -893,6 +1410,12 @@ def pool_best_hps(name, case):
         return {**hps, "backbone": "rgcn", "copies": True}
     if case == "edge_label":
         return {**hps, "backbone": "rgcn", "graph_split": True}
+    if case == "copies_plus":
+        # The transformer gets one self-attention block, run 3's most common winner
+        return {"node_input_dim": GIN_CAT_LEARNED_DIM, **hps, "backbone": "rgcn", "copies": True,
+                "copy_clique": False, "copy_counts": True, "pma_heads": TRANSFORMER_HEADS, "pma_sabs": 1,
+                "attn_pool_hidden_dim": hps.get("attn_pool_hidden_dim", 32),
+                "attn_pool_dropout": hps.get("attn_pool_dropout", 0.0)}
     readout = CASE_READOUTS[case][0]
     hps = {k: v for k, v in hps.items() if k not in POOL_ONLY_HPS}
     return {**hps, "readout": readout, **NEW_READOUT_HPS[readout]}
@@ -908,6 +1431,24 @@ def small_grid(case, name, base_hps=None):
     if case == "member_copies" and name in REAL:
         own = base_hps["node_input"] if base_hps else "pool"
         grid["node_input"] = [own] if own == "gin_ft" else [own, "gin_ft"]
+    if case == "copies_plus":
+        grid["readout"] = [base_hps["readout"] if base_hps else "pool", "transformer"]
+        if name in REAL:
+            grid["node_input"] = [base_hps["node_input"] if base_hps else "pool", "gin_cat"]
+    if case in ("edge_label_recipe", "copies_recipe"):
+        # Each axis: the base config's own value, then GLASS's (an axis where they agree has one value)
+        recipe = glass_recipe(name)
+        own = base_hps or {}
+        axes = {"readout": recipe["readout"]}
+        if case == "edge_label_recipe":
+            axes["node_input"] = "glass_ft"
+        else:
+            # batch_size None: the base config's own n_batches. GLASS's tiny synthetic batches make
+            # a coreness run ~10 min, so lr and the head stay the base config's
+            axes["batch_size"] = recipe["batch_size"]
+        for key, glass_value in axes.items():
+            own_value = own.get(key, "own") if key != "batch_size" else None
+            grid[key] = [own_value] if own_value == glass_value else [own_value, glass_value]
     return grid
 
 
@@ -944,10 +1485,11 @@ def run_small_search(name, prep, out_dir, epochs, base_hps, grid):
     return max(points, key=lambda hps: done[json.dumps(hps)])
 
 
-def run_seeds(name, prep, seeds, out_dir, epochs, hps=None):
+def run_seeds(name, prep, seeds, out_dir, epochs, hps=None, prep_of=None):
     """
     Retrain a config over `seeds` seeds and write summary.json: the given hps, or
-    the study's best. Each seed's test predictions go to test_predictions.csv
+    the study's best. prep_of(seed), when given, is the prep each seed trains on
+    (GLASS's per-seed splits). Each seed's test predictions go to test_predictions.csv
     (one row per test subgraph: its size, true and predicted labels, and whether
     they match exactly). Resumable: seeds already in seed_results.csv and in
     test_predictions.csv for this same config are kept, not rerun; a seed from
@@ -985,7 +1527,7 @@ def run_seeds(name, prep, seeds, out_dir, epochs, hps=None):
         if seed in done_seeds:
             continue
         start = time.time()
-        res = train(prep, hps, epochs=epochs, seed=seed)
+        res = train(prep_of(seed) if prep_of else prep, hps, epochs=epochs, seed=seed)
         row = make_row(name, hps, "best", seed, res, time.time() - start)
         p = res["test_predictions"]
         pd.DataFrame({"hps_id": hps_id, "seed": seed, "subgraph": p["subgraph"],
@@ -1071,13 +1613,14 @@ def run_all(args):
         if args.seeds_only:
             return s["n_seeds"] >= args.seeds
         trials = args.trials if case == "pool" else \
-            int(np.prod([len(v) for v in small_grid(case, name).values()]))
+            int(np.prod([len(v) for v in small_grid(case, name, pool_best_hps(name, case)).values()]))
         return s["n_seeds"] >= args.seeds and s["n_trials"] >= trials
 
     # Each job is its own process, so all of its memory (RAM and GPU) is
     # returned to the system the moment it ends, before the next one starts.
     jobs = [(case, name) for name in HEAVIEST_FIRST if name not in args.exclude for case in args.cases
-            if not (case in REAL_ONLY_CASES and name not in REAL)]
+            if not (case in REAL_ONLY_CASES and name not in REAL)
+            and not (case in SYNTHETIC_ONLY_CASES and name not in SYNTHETIC)]
     queue = [job for job in jobs if not finished(*job)]
     skipped = [f"{case}/{name}" for case, name in jobs if (case, name) not in queue]
     if skipped:
@@ -1161,6 +1704,7 @@ def main():
 
     start = time.time()
     prep = prepare(load_dataset(args.dataset, args.data_root))
+    prep["name"] = args.dataset
     print(f"[{args.dataset}] loaded in {time.time() - start:.1f}s: {prep['stats']}, "
           f"node inputs {node_input_choices(prep)}, device {DEVICE}")
 
@@ -1172,6 +1716,9 @@ def main():
         if case in REAL_ONLY_CASES and args.dataset not in REAL:
             print(f"[{args.dataset}] {case} needs pretrained vectors - skipping")
             continue
+        if case in SYNTHETIC_ONLY_CASES and args.dataset not in SYNTHETIC:
+            print(f"[{args.dataset}] {case} is for the synthetic datasets only - skipping")
+            continue
         if case != "pool":
             # Pool's best config with this case's readout, then the small grid on top of it
             hps = pool_best_hps(args.dataset, case)
@@ -1180,12 +1727,18 @@ def main():
                 continue
             os.makedirs(out_dir, exist_ok=True)
             seeds, epochs = (2, 15) if args.smoke else (args.seeds, args.epochs)
+            case_prep, prep_of = prep, None
+            if case in GLASS_EVAL_CASES:
+                # GLASS's splits: the grid uses repeat 0's, each seed its own repeat's
+                case_prep = glass_split(prep, args.dataset, 0)
+                if args.dataset in SYNTHETIC:
+                    prep_of = lambda seed: glass_split(prep, args.dataset, seed)  # noqa: E731
             if not args.seeds_only:
-                hps = run_small_search(args.dataset, prep, out_dir, epochs, hps,
+                hps = run_small_search(args.dataset, case_prep, out_dir, epochs, hps,
                                        small_grid(case, args.dataset, hps))
             else:
                 hps = best_hps_of(out_dir)
-            run_seeds(args.dataset, prep, seeds, out_dir, epochs, hps)
+            run_seeds(args.dataset, case_prep, seeds, out_dir, epochs, hps, prep_of=prep_of)
             collect(results_dir)
             continue
         os.makedirs(out_dir, exist_ok=True)

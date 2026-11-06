@@ -1,0 +1,22 @@
+{
+    "dataset": "component",
+    "backbone": "rgcn",
+    "readout": "transformer",
+    "node_input": "struct",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 100.0,
+    "test_std": 0.0,
+    "val_mean": 100.0,
+    "val_std": 0.0,
+    "n_seeds": 10,
+    "n_trials": 3,
+    "mean_seconds_per_run": 31.4,
+    "n_nodes": 17260,
+    "n_graph_edges": 91619,
+    "n_same_subgraph_edges": 877470,
+    "n_subgraphs": 250,
+    "n_classes": 2,
+    "multilabel": false,
+    "hps": "{\"node_input_dim\": 64, \"backbone\": \"rgcn\", \"readout\": \"transformer\", \"lr\": 0.003, \"gnn_embedding_dim\": 100, \"gnn_hidden_dim\": 100, \"k_gnn_layers\": 2, \"gnn_dropout_rate\": 0.2, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 0.0001, \"node_input\": \"struct\", \"num_heads\": 4, \"color_mlp_hidden_dims\": 32, \"attn_pool_hidden_dim\": 32, \"attn_pool_dropout\": 0.0, \"copies\": true, \"copy_clique\": false, \"copy_counts\": true, \"pma_heads\": 4, \"pma_sabs\": 1, \"count_skip\": true}",
+    "by_variant": "[{\"backbone\": \"rgcn\", \"readout\": \"transformer\", \"max\": 1.0, \"count\": 3}]"
+}

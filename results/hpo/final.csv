@@ -1,0 +1,9 @@
+dataset,setup,coloring,trial,n_seeds,val_mean,val_std,test_mean,test_std,train_mean,seconds_mean,aggregation,pooling,hidden,layers,lr,dropout,input_dropout,batch,weight_decay,norm,jk,head,counts
+hpo_neuro,colors,Gin_Gout,61,10,58.11,0.7,64.59,0.73,93.03,767.7,mean,gated_attn,128,2,0.0012308977429455054,0.4,0.5,1.0,0.0001,none,True,0,
+hpo_metab,colors,Gin_Gout,88,10,64.63,2.28,60.51,2.76,94.97,317.5,mean,max,64,2,0.0011103050138635694,0.0,0.5,2.0,0.001,batch,False,0,
+em_user,colors,Gin_Gout,149,10,81.02,7.27,82.86,7.34,92.13,353.7,attention,gated_attn,32,2,0.00028049175845524686,0.0,0.2,2.0,0.0,graph,True,0,
+ppi_bp,colors,Gin_Gout,291,10,71.81,1.12,55.28,0.86,95.7,115.2,mean,mean,256,3,0.00036517910224316915,0.1,0.30000000000000004,2.0,1e-05,none,True,0,
+coreness,colors,I_O,260,10,94.18,3.41,86.73,5.15,94.23,23.8,gcn,mean,64,2,0.008606415175957647,0.30000000000000004,0.4,2.0,0.0,layer,True,64,True
+density,colors,I_O,117,10,99.68,0.68,98.89,1.31,99.6,76.9,attention,transformer,32,1,0.006357478089644631,0.6,0.30000000000000004,2.0,0.001,layer,True,64,True
+component,colors,I_O,0,10,100.0,0.0,100.0,0.0,100.0,53.5,sum,size,32,1,0.0046263628414755864,0.5,0.6,0.5,0.0,graph,True,0,False
+cut_ratio,colors,I_O,73,10,99.19,1.14,95.24,1.98,99.36,18.2,gcn,mean,16,1,0.0048349594304863495,0.30000000000000004,0.30000000000000004,1.0,0.001,layer,True,64,True

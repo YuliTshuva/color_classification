@@ -1,0 +1,22 @@
+{
+    "dataset": "hpo_neuro",
+    "backbone": "rgcn",
+    "readout": "multistat",
+    "node_input": "gin_ft",
+    "metric": "micro-F1 (x100)",
+    "test_mean": 60.03,
+    "test_std": 1.86,
+    "val_mean": 49.33,
+    "val_std": 2.43,
+    "n_seeds": 10,
+    "n_trials": 6,
+    "mean_seconds_per_run": 135.7,
+    "n_nodes": 14587,
+    "n_graph_edges": 3238174,
+    "n_same_subgraph_edges": 237827,
+    "n_subgraphs": 4000,
+    "n_classes": 10,
+    "multilabel": true,
+    "hps": "{\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"lr\": 0.003, \"gnn_embedding_dim\": 156, \"gnn_hidden_dim\": 128, \"k_gnn_layers\": 1, \"gnn_dropout_rate\": 0.5, \"gnn_mlp_hidden_dims\": 64, \"mlp_dropout_rate\": 0.2, \"weight_decay\": 0.0, \"node_input\": \"gin_ft\", \"color_mlp_hidden_dims\": 64, \"feature_norm\": \"standardize\"}",
+    "by_variant": "[{\"backbone\": \"rgcn\", \"readout\": \"multistat\", \"max\": 0.5098, \"count\": 6}]"
+}
