@@ -1,0 +1,5 @@
+dataset,setup,coloring,trial,n_seeds,val_mean,val_std,test_mean,test_std,train_mean,seconds_mean,aggregation,pooling,hidden,layers,lr,dropout,input_dropout,batch,weight_decay,norm,jk,head
+hpo_neuro,colors,Icopy_Iplain_O,69,10,59.57,0.74,68.4,0.48,98.11,570.7,gcn,size,256,1,0.0015441023748657102,0.5,0.5,2.0,0.001,batch,False,64
+hpo_metab,colors,I_O,142,10,68.73,0.91,64.98,2.09,88.79,102.3,sum,gated_attn,64,1,0.0039021944040228697,0.2,0.5,2.0,0.0,graph,False,0
+em_user,colors,I_O_C,66,10,84.69,1.99,81.22,3.16,99.78,344.0,sum,gated_attn,32,3,0.0019240274976922488,0.30000000000000004,0.5,2.0,1e-05,layer,True,64
+ppi_bp,colors,I_O_C,139,10,69.63,1.94,58.62,2.18,99.79,37.3,gcn,multistat,32,2,0.0017328082091023654,0.6,0.5,2.0,1e-05,layer,True,64

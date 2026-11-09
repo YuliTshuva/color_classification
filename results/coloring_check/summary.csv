@@ -1,0 +1,4 @@
+dataset,picked_coloring,picked_val,picked_test,picked_test_std,coloring,n_seeds,val_mean,val_std,test_mean,test_std,test_diff
+hpo_neuro,Icopy_Iplain_O,59.57,68.4,0.48,I_O,10,58.67,0.92,67.57,1.12,-0.83
+em_user,I_O_C,84.69,81.22,3.16,I_O,10,74.69,2.75,68.98,6.72,-12.24
+ppi_bp,I_O_C,69.63,58.62,2.18,I_O,10,67.56,1.83,60.63,2.34,2.01

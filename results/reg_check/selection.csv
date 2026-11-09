@@ -1,0 +1,11 @@
+dataset,variant,picked_trial,val,test,test_std,train,best_test_of_3
+em_user,base,66.0,84.69,81.22,3.16,99.78,83.88
+em_user,drop,145.0,83.26,77.55,5.35,94.91,82.45
+em_user,wd,145.0,85.31,80.2,3.73,99.12,81.84
+em_user,both,145.0,83.26,78.98,3.2,95.93,78.98
+ppi_bp,base,139.0,69.63,58.62,2.18,99.79,61.01
+ppi_bp,drop,192.0,68.75,59.81,1.91,99.62,59.81
+ppi_bp,wd,192.0,69.12,60.38,1.11,99.99,60.38
+ppi_bp,both,192.0,69.12,60.06,2.18,99.8,60.06
+em_user,all (val-test corr),,0.96,,,,
+ppi_bp,all (val-test corr),,0.68,,,,
