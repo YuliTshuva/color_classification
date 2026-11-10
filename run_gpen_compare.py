@@ -1146,9 +1146,9 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
     # A probability of 0.5 is a logit of 0
     threshold = 0.5 if readout == "node_score_mean" else 0.0
 
-    def val_f1(color_out):
-        """Micro-F1 on the validation subgraphs, on the GPU (accuracy when single-label)."""
-        out, target = color_out[sub_idx[1]], y[sub_idx[1]]
+    def val_f1(color_out, s=1):
+        """Micro-F1 on the validation subgraphs (or split s), on the GPU (accuracy when single-label)."""
+        out, target = color_out[sub_idx[s]], y[sub_idx[s]]
         if not multilabel:
             return (out.argmax(1) == target).float().mean().item()
         pred, true = out > threshold, target > 0.5
@@ -1160,6 +1160,12 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
     # Validation is scored in eval mode, so dropout does not blur the selection.
     # With glass_stop, epochs before min_epochs are not candidates (GLASS does not score them).
     best_score, unimproved_epochs, best_states = (-1.0, -torch.inf), 0, None
+    # glass_select: also record the test score GLASS's selection would report (GLASSTest.py), for
+    # comparison only - it reads test, so it never picks anything. Among the epochs tied on the best
+    # validation micro-F1, the best test. Training, stopping and test_f1 are unchanged; since our
+    # stopping counts tied epochs as unimproved (GLASS's does not), it can only under-count GLASS's.
+    glass_select = bool(hps.get("glass_select"))
+    glass_val, glass_test, test_now = -1.0, -1.0, None
     epoch = 0
     for epoch in range(epochs):
         for m in modules.values():
@@ -1181,10 +1187,17 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
             node_logits, color_out = forward()
             val_loss = (node_loss_weight * node_loss(node_logits, 1) + color_loss(color_out, 1)).item()
             score = (val_f1(color_out), -val_loss)
+            if glass_select:
+                test_now = val_f1(color_out, 2)
         scheduler.step(float(np.mean(train_losses)) if lr_on_train else val_loss)
 
         if glass_stop and epoch < min_epochs:
             continue
+        if glass_select:
+            if score[0] > glass_val + 1e-5:
+                glass_val, glass_test = score[0], test_now
+            elif score[0] >= glass_val - 1e-5:
+                glass_test = max(glass_test, test_now)
         if score > best_score:
             best_score = score
             unimproved_epochs = 0
@@ -1212,6 +1225,8 @@ def train(prep, hps, epochs=EPOCHS, seed=SEED):
         true = y.cpu().numpy()
 
     out = {"epochs": epoch + 1}
+    if glass_select:
+        out["test_f1_glass"] = glass_test
     for split_name, s in SPLITS.items():
         idx = sub_idx[s].cpu().numpy()
         out[f"{split_name}_f1"] = float(f1_score(true[idx], pred[idx], average="micro", zero_division=0))
@@ -1281,19 +1296,24 @@ TRIAL_FIELDS = ["dataset", "backbone", "readout", "trial", "seed", "train_f1", "
 
 def append_row(csv_path, row):
     write_header = not os.path.exists(csv_path)
+    # glass_select runs carry one more column, at the end; other CSVs are unchanged
+    fields = TRIAL_FIELDS + [k for k in ("test_f1_glass",) if k in row]
     with open(csv_path, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=TRIAL_FIELDS)
+        writer = csv.DictWriter(f, fieldnames=fields)
         if write_header:
             writer.writeheader()
         writer.writerow(row)
 
 
 def make_row(name, hps, trial, seed, res, seconds):
-    return {"dataset": name, "backbone": hps["backbone"], "readout": hps["readout"],
-            "trial": trial, "seed": seed,
-            "train_f1": round(res["train_f1"], 4), "val_f1": round(res["val_f1"], 4),
-            "test_f1": round(res["test_f1"], 4), "epochs": res["epochs"],
-            "seconds": round(seconds, 1), "hps": json.dumps(hps)}
+    row = {"dataset": name, "backbone": hps["backbone"], "readout": hps["readout"],
+           "trial": trial, "seed": seed,
+           "train_f1": round(res["train_f1"], 4), "val_f1": round(res["val_f1"], 4),
+           "test_f1": round(res["test_f1"], 4), "epochs": res["epochs"],
+           "seconds": round(seconds, 1), "hps": json.dumps(hps)}
+    if hps.get("glass_select"):
+        row["test_f1_glass"] = round(res.get("test_f1_glass", -1.0), 4)
+    return row
 
 
 def is_oom(e):

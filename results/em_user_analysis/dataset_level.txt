@@ -1,0 +1,8 @@
+glass_centroid_cosine 0.9998
+glass_cv_auc 0.6684 0.0401
+structural_cv_auc 0.9862 0.0171
+       count  frac_pos
+split                 
+test      49     0.592
+train    226     0.491
+val       49     0.449
